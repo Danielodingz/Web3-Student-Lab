@@ -31,7 +31,7 @@ export type AppQueryClient = ReturnType<typeof makeQueryClient>;
 
 declare global {
   // eslint-disable-next-line no-var
-  __TENSTACK_QUERY_CLIEN__?: AppQueryClient;
+  var __TENSTACK_QUERY_CLIENT__: AppQueryClient | undefined;
 }
 
 export function getQueryClient(): AppQueryClient {

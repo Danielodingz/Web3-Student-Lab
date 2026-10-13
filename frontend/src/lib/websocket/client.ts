@@ -81,7 +81,7 @@ export class ResilientWebSocketClient {
     return this.buffer.length;
   }
 
-  on<E unknown Extends WebSocketClientEventName>(
+  on<E extends WebSocketClientEventName>(
     event: E,
     handler: WebSocketClientEvents[E],
   ): () => void {
