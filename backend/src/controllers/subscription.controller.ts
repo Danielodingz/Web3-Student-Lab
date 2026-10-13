@@ -16,7 +16,7 @@ export const subscriptionController = {
 
   // Get specific plan by tier
   getPlan: asyncHandler(async (req: Request, res: Response) => {
-    const { tier } = req.params;
+    const tier = req.params.tier as string;
 
     const plan = await subscriptionService.getPlanByTier(tier);
 
@@ -76,7 +76,7 @@ export const subscriptionController = {
   // Cancel subscription
   cancelSubscription: asyncHandler(async (req: Request, res: Response) => {
     const userId = req.user?.id;
-    const { subscriptionId } = req.params;
+    const subscriptionId = req.params.subscriptionId as string;
 
     if (!userId) {
       return res.status(401).json(ApiResponse.error('User not authenticated'));
@@ -102,7 +102,7 @@ export const subscriptionController = {
   // Renew subscription
   renewSubscription: asyncHandler(async (req: Request, res: Response) => {
     const userId = req.user?.id;
-    const { subscriptionId } = req.params;
+    const subscriptionId = req.params.subscriptionId as string;
 
     if (!userId) {
       return res.status(401).json(ApiResponse.error('User not authenticated'));
@@ -133,7 +133,7 @@ export const subscriptionController = {
   // Get specific subscription
   getSubscription: asyncHandler(async (req: Request, res: Response) => {
     const userId = req.user?.id;
-    const { subscriptionId } = req.params;
+    const subscriptionId = req.params.subscriptionId as string;
 
     if (!userId) {
       return res.status(401).json(ApiResponse.error('User not authenticated'));
@@ -152,7 +152,7 @@ export const subscriptionController = {
   // Get subscription payment history
   getSubscriptionPayments: asyncHandler(async (req: Request, res: Response) => {
     const userId = req.user?.id;
-    const { subscriptionId } = req.params;
+    const subscriptionId = req.params.subscriptionId as string;
 
     if (!userId) {
       return res.status(401).json(ApiResponse.error('User not authenticated'));

@@ -89,3 +89,36 @@ export const getIO = () => {
   }
   return io;
 };
+
+/**
+ * Singleton helper class that subscription.controller.ts and similar callers
+ * use to broadcast events without holding a direct reference to the io Server.
+ */
+export class WebSocketServer {
+  private static _instance: WebSocketServer | null = null;
+
+  static getInstance(): WebSocketServer {
+    if (!WebSocketServer._instance) {
+      WebSocketServer._instance = new WebSocketServer();
+    }
+    return WebSocketServer._instance;
+  }
+
+  /** Emit an event to all sockets belonging to a specific user. */
+  broadcastToUser(userId: string, event: { type: string; payload?: unknown; data?: unknown }): void {
+    try {
+      getIO().to(`user:${userId}`).emit(event.type, event.payload ?? event.data ?? null);
+    } catch {
+      // io not yet initialised (e.g. during tests) — swallow silently.
+    }
+  }
+
+  /** Emit an event to all connected sockets. */
+  broadcast(event: { type: string; payload?: unknown; data?: unknown }): void {
+    try {
+      getIO().emit(event.type, event.payload ?? event.data ?? null);
+    } catch {
+      // io not yet initialised — swallow silently.
+    }
+  }
+}

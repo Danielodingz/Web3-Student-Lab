@@ -278,7 +278,7 @@ compileWorker.on('failed', (job, err) => {
 
   if (job?.data.userId) {
     void broadcastEvent('compile_progress', {
-      jobId: job.id,
+      jobId: job.id ?? 'unknown',
       userId: job.data.userId,
       stage: 'failed' as CompileProgressStage,
       progress: 100,

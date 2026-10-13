@@ -2,13 +2,10 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { ApiResponse } from '../utils/response.js';
 import { prisma } from '../db/index.js';
+import { User } from '../auth/types.js';
 
 interface AuthRequest extends Request {
-  user?: {
-    id: string;
-    email: string;
-    role?: string;
-  };
+  user?: User;
 }
 
 export const authenticateToken = async (req: AuthRequest, res: Response, next: NextFunction) => {
@@ -28,6 +25,8 @@ export const authenticateToken = async (req: AuthRequest, res: Response, next: N
       select: {
         id: true,
         email: true,
+        firstName: true,
+        lastName: true,
       },
     });
 
@@ -38,6 +37,7 @@ export const authenticateToken = async (req: AuthRequest, res: Response, next: N
     req.user = {
       id: student.id,
       email: student.email,
+      name: `${student.firstName} ${student.lastName}`.trim() || student.email,
       role: decoded.role || 'student',
     };
 

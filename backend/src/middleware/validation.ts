@@ -97,18 +97,18 @@ export function stripPrototypePollutingKeys(value: unknown): unknown {
  * Works with z.object(), z.object().strict(), and common wrapped forms
  * (z.optional(), z.nullable(), z.default(), z.preprocess()).
  */
-function extractSchemaKeys(schema: z.ZodSchema): Set<string> | null {
+function extractSchemaKeys(schema: z.ZodType<any, any>): Set<string> | null {
   let s: any = schema;
 
-  // Unwrap modifiers that wrap an inner type
-  while (
-    s instanceof z.ZodOptional ||
-    s instanceof z.ZodNullable ||
-    s instanceof z.ZodDefault ||
-    s instanceof z.ZodEffects
-  ) {
-    s = s._def?.innerType ?? s._def?.schema ?? null;
-    if (!s) return null;
+  // Unwrap modifiers that wrap an inner schema:
+  //   ZodOptional / ZodNullable / ZodDefault  -> _def.innerType
+  //   ZodTransform (a.k.a. ZodEffects in zod v3) -> _def.in
+  for (let depth = 0; depth < 20; depth++) {
+    const def = s?._def;
+    if (!def) break;
+    const inner = def.innerType ?? def.in ?? def.schema ?? null;
+    if (!inner || inner === s) break;
+    s = inner;
   }
 
   if (s instanceof z.ZodObject) {

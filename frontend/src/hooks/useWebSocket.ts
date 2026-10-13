@@ -48,7 +48,7 @@ export const useWebSocket = (urlOrOptions?: string | UseWebSocketOptions) => {
     clientRef.current.connect();
   }, []);
 
-  useEffect() {
+  useEffect(() => {
     const client = clientRef.current;
     const token = options.token ?? localStorage.getItem('auth_token');
     if (!token) {

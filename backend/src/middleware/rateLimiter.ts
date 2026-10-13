@@ -108,7 +108,7 @@ function extractClientIp(req: Request): string {
     return socketAddr;
   }
 
-  return parts[clientIndex];
+  return parts[clientIndex] ?? socketAddr;
 }
 
 // ---------------------------------------------------------------------------

@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { AuditService } from '../services/audit.service';
+import { AuditService } from '../services/audit.service.js';
 
 const router = Router();
 const auditService = new AuditService();

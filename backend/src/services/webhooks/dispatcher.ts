@@ -84,7 +84,7 @@ export const buildWebhookDeliveryJob = (request: WebhookDeliveryRequest): Webhoo
     destination: request.destination,
     event: request.event,
     metadata: request.metadata ?? {},
-    traceId: getTraceId() as string,
+    traceId: getTraceId() ?? '',
     idempotencyKey,
   };
 };

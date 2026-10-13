@@ -396,7 +396,8 @@ const syncOverallProgressHandler = async (req: Request, res: Response): Promise<
       const courseLessonsMap = new Map<string, string[]>();
       for (const item of completedLessons) {
         if (typeof item !== 'string' || !item.trim()) continue;
-        const [cId, lId] = item.includes(':') ? item.split(':') : ['default', item];
+        const parts = item.includes(':') ? item.split(':') : ['default', item];
+        const cId = parts[0] || 'default';
         const current = courseLessonsMap.get(cId) || [];
         if (!current.includes(item)) {
           current.push(item);

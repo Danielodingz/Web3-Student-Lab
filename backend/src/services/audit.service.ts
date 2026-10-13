@@ -42,6 +42,9 @@ export class AuditService {
 
     public recordDeployment(sessionId: string, ledgerSequence: number, action: string, payload: object): AuditLogEntry {
         const previousEntry = this.chain[this.chain.length - 1];
+        if (!previousEntry) {
+            throw new Error('Genesis block missing in audit chain');
+        }
         const sequenceNumber = previousEntry.sequenceNumber + 1;
         const timestamp = Date.now();
         const payloadString = JSON.stringify(payload);
@@ -68,6 +71,9 @@ export class AuditService {
         for (let i = 1; i < this.chain.length; i++) {
             const current = this.chain[i];
             const previous = this.chain[i - 1];
+            if (!current || !previous) {
+                continue;
+            }
 
             // Verify previous hash link
             if (current.previousHash !== previous.hash) {

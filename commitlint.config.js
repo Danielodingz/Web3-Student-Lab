@@ -5,6 +5,7 @@ module.exports = {
       commit.startsWith('Merge ') ||
       commit.startsWith('Fix/') ||
       commit.startsWith('feat/') ||
-      commit.startsWith('chore/'),
+      commit.startsWith('chore/') ||
+      commit.startsWith('Resolve merge conflicts'),
   ],
 };
