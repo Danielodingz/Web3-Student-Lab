@@ -184,6 +184,13 @@ export async function middleware(request: NextRequest) {
 
   const isDev = process.env.NODE_ENV === 'development';
 
+  const hostname = request.nextUrl.hostname;
+  const isLocalhost =
+    hostname === 'localhost' ||
+    hostname === '127.0.0.1' ||
+    hostname === '::1' ||
+    hostname === '[::1]';
+
   const cspDirectives: Record<string, string[]> = isDev
     ? {
         // Development: allow unsafe-eval for HMR / source maps only
@@ -211,34 +218,48 @@ export async function middleware(request: NextRequest) {
         'worker-src': ["'self'", 'blob:'],
         'manifest-src': ["'self'"],
       }
-    : {
-        // Production: nonce-based, no unsafe-inline / unsafe-eval
-        'default-src': ["'self'"],
-        'script-src': [`'nonce-${nonce}'`, "'strict-dynamic'", "'self'"],
-        // No unsafe-inline in production — CSS modules and CSS vars only
-        'style-src': ["'self'"],
-        'img-src': ["'self'", 'data:', 'blob:', 'https:'],
-        'font-src': ["'self'", 'data:'],
-        'connect-src': [
-          "'self'",
-          process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080',
-          (process.env.NEXT_PUBLIC_WS_URL || 'wss://localhost:8080').replace(/^https/, 'wss').replace(/^http/, 'ws'),
-          (process.env.NEXT_PUBLIC_WS_URL || 'wss://localhost:8080').replace(/^wss?/, 'wss'),
-          'https://soroban-testnet.stellar.org',
-          'https://soroban-test.stellar.org:443',
-          'https://horizon-testnet.stellar.org',
-          'https://stellar.expert',
-        ],
-        'frame-src': ["'none'"],
-        'object-src': ["'none'"],
-        'base-uri': ["'self'"],
-        'form-action': ["'self'"],
-        'frame-ancestors': ["'none'"],
-        'block-all-mixed-content': [],
-        'upgrade-insecure-requests': [],
-        'worker-src': ["'self'", 'blob:'],
-        'manifest-src': ["'self'"],
-      };
+    : (() => {
+        const directives: Record<string, string[]> = {
+          // Production: nonce-based, no unsafe-inline / unsafe-eval
+          'default-src': ["'self'"],
+          'script-src': [`'nonce-${nonce}'`, "'strict-dynamic'", "'self'"],
+          // No unsafe-inline in production — CSS modules and CSS vars only
+          'style-src': ["'self'"],
+          'img-src': ["'self'", 'data:', 'blob:', 'https:'],
+          'font-src': ["'self'", 'data:'],
+          'connect-src': [
+            "'self'",
+            process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080',
+            (process.env.NEXT_PUBLIC_WS_URL || 'wss://localhost:8080').replace(/^https/, 'wss').replace(/^http/, 'ws'),
+            (process.env.NEXT_PUBLIC_WS_URL || 'wss://localhost:8080').replace(/^wss?/, 'wss'),
+            'https://soroban-testnet.stellar.org',
+            'https://soroban-test.stellar.org:443',
+            'https://horizon-testnet.stellar.org',
+            'https://stellar.expert',
+          ],
+          'frame-src': ["'none'"],
+          'object-src': ["'none'"],
+          'base-uri': ["'self'"],
+          'form-action': ["'self'"],
+          'frame-ancestors': ["'none'"],
+          'block-all-mixed-content': [],
+          'upgrade-insecure-requests': [],
+          'worker-src': ["'self'", 'blob:'],
+          'manifest-src': ["'self'"],
+        };
+
+        // WebKit (Safari, and the Playwright webkit runner) applies both
+        // mixed-content directives to plain-HTTP localhost requests as well,
+        // upgrading http://localhost to https://localhost and breaking every
+        // stylesheet/script on local runs and the E2E webServer. Those
+        // directives protect nothing on localhost, so drop them there.
+        if (isLocalhost) {
+          delete directives['block-all-mixed-content'];
+          delete directives['upgrade-insecure-requests'];
+        }
+
+        return directives;
+      })();
 
   const cspValue = Object.entries(cspDirectives)
     .map(([directive, values]) => {
