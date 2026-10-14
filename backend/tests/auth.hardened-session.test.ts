@@ -1,5 +1,7 @@
 import { getCookieOptions, getRefreshTokenCookieOptions, getRefreshTokenFromReq, REFRESH_TOKEN_COOKIE_NAME } from '../src/utils/cookie.js';
 import {
+  generateAccessToken,
+  verifyAccessToken,
   generateRefreshToken,
   rotateRefreshToken,
   verifyRefreshToken,
@@ -15,6 +17,8 @@ describe('Hardened Refresh Token Session Unit & Concurrency Tests', () => {
 
   beforeEach(async () => {
     jest.restoreAllMocks();
+    process.env.ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET || 'test-access-token-secret-for-testing';
+    process.env.REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET || 'test-refresh-token-secret-for-testing';
     // Clean up all test keys in redis
     if (redis && typeof redis.keys === 'function') {
       const keys = await redis.keys('rt:*');

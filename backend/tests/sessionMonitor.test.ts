@@ -74,6 +74,7 @@ describe('Session Activity Monitor (#1116)', () => {
     await touchSession(userId);
     await lockSession(userId);
     configureSessionMonitor({ idleLockMs: 0, extendedIdleMs: 1 });
+    await new Promise((resolve) => setTimeout(resolve, 10));
     expect(await unlockSession(userId)).toBe(false);
     // Restore defaults for subsequent tests.
     configureSessionMonitor({

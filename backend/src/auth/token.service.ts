@@ -3,9 +3,21 @@ import jwt from 'jsonwebtoken';
 import logger from '../utils/logger.js';
 import { getRedisClient } from '../utils/redis.js';
 
-const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET || 'access-secret';
-const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET || 'refresh-secret';
-export const getAccessTokenSecret = (): string => ACCESS_TOKEN_SECRET;
+export const getAccessTokenSecret = (): string => {
+  const secret = process.env.ACCESS_TOKEN_SECRET || process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error('ACCESS_TOKEN_SECRET is not configured');
+  }
+  return secret;
+};
+
+export const getRefreshTokenSecret = (): string => {
+  const secret = process.env.REFRESH_TOKEN_SECRET;
+  if (!secret) {
+    throw new Error('REFRESH_TOKEN_SECRET is not configured');
+  }
+  return secret;
+};
 
 const ACCESS_TOKEN_EXPIRY = '15m';
 const REFRESH_TOKEN_EXPIRY_DAYS = 7;
@@ -42,7 +54,7 @@ const verifyJwt = (token: string, secret: string): any => {
 
 export const generateAccessToken = (payload: TokenPayload): string => {
   const cleanPayload: { userId: string; [key: string]: any } = { userId: payload.userId };
-  return signJwt(cleanPayload, ACCESS_TOKEN_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRY });
+  return signJwt(cleanPayload, getAccessTokenSecret(), { expiresIn: ACCESS_TOKEN_EXPIRY });
 };
 
 export const generateRefreshToken = async (
@@ -58,7 +70,7 @@ export const generateRefreshToken = async (
     tokenId,
   };
 
-  const refreshToken = signJwt(tokenPayload, REFRESH_TOKEN_SECRET, {
+  const refreshToken = signJwt(tokenPayload, getRefreshTokenSecret(), {
     expiresIn: `${REFRESH_TOKEN_EXPIRY_DAYS}d`,
   });
 
@@ -90,7 +102,7 @@ export const verifyAccessToken = (token: string): TokenPayload => {
 export const verifyRefreshToken = async (token: string): Promise<TokenPayload> => {
   let decoded: TokenPayload;
   try {
-    decoded = verifyJwt(token, REFRESH_TOKEN_SECRET) as TokenPayload;
+    decoded = verifyJwt(token, getRefreshTokenSecret()) as TokenPayload;
   } catch (_err) {
     throw new Error('Refresh token has been reused or revoked');
   }
@@ -191,7 +203,7 @@ export const rotateRefreshToken = async (
 ): Promise<{ accessToken: string; refreshToken: string }> => {
   let decoded: TokenPayload;
   try {
-    decoded = verifyJwt(oldToken, REFRESH_TOKEN_SECRET) as TokenPayload;
+    decoded = verifyJwt(oldToken, getRefreshTokenSecret()) as TokenPayload;
   } catch (_err) {
     throw new Error('Refresh token has been reused or revoked');
   }
@@ -286,7 +298,7 @@ export const rotateRefreshToken = async (
         };
 
         const accessToken = generateAccessToken({ userId: family.userId });
-        const refreshToken = signJwt(newPayload, REFRESH_TOKEN_SECRET, {
+        const refreshToken = signJwt(newPayload, getRefreshTokenSecret(), {
           expiresIn: `${REFRESH_TOKEN_EXPIRY_DAYS}d`,
         });
 

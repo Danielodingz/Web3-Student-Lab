@@ -30,6 +30,18 @@ app.use(jsonBodySizeLimit);
 // Attach DB routing context middleware to ensure GETs are routed to replicas
 app.use(dbRoutingMiddleware);
 
+/**
+ * @openapi
+ * /health:
+ *   get:
+ *     summary: Health check endpoint
+ *     description: Health check endpoint for system monitoring
+ *     tags: [System]
+ *     security: []
+ *     responses:
+ *       200:
+ *         description: OK
+ */
 app.get('/health', (_req: Request, res: Response) => {
   res.json({
     status: 'ok',

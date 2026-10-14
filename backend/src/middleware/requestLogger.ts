@@ -19,7 +19,12 @@
 
 import { NextFunction, Request, Response } from 'express';
 import { randomUUID } from 'node:crypto';
-import logger, { traceContext } from '../utils/logger.js';
+import logger, {
+  traceContext,
+  setCorrelationId,
+  getCorrelationId,
+  clearCorrelationId,
+} from '../utils/logger.js';
 import { redactSensitiveData } from '../utils/logSanitizer.js';
 
 // ─── Extend Express typings ──────────────────────────────────────────────────
@@ -59,47 +64,36 @@ function sanitizeBody(body: unknown): unknown {
   return redactSensitiveData(body);
 }
 
-// ─── Primary middleware (exported as requestLogger for drop-in replacement) ──
+// ─── Detailed Request Logger Middleware ──────────────────────────────────────
 
 /**
  * Detailed request logger with AsyncLocalStorage-based trace propagation.
  *
  * Every log line emitted anywhere inside the request's async call chain will
  * automatically include `traceId` — no manual passing required.
- *
- * Acceptance criteria (Issue #981):
- *   ✅ Every log line includes a traceId field
- *   ✅ API responses include X-Request-ID header matching the log traceId
- *   ✅ BullMQ jobs inherit parent traceId when enqueued from within a request
- *   ✅ Adding OTel exporters requires configuration only, not code changes
- *   ✅ Overhead: ~0.1 ms — well below the 2 ms budget
  */
-export const requestLogger = (req: Request, res: Response, next: NextFunction): void => {
+export const detailedRequestLogger = (req: Request, res: Response, next: NextFunction): void => {
   const traceId = resolveTraceId(req);
   const startTime = Date.now();
 
-  // Attach to request object for manual access (e.g. when forwarding to external APIs)
+  // Attach to request object for manual access
   req.traceId = traceId;
-  req.correlationId = traceId; // backward compat
+  req.correlationId = traceId;
   req.startTime = startTime;
 
-  // Echo the traceId back to the client immediately — before any async work.
+  // Set correlation ID in synchronous logger context for compatibility
+  setCorrelationId(traceId);
+
+  // Echo headers back to the client immediately
   res.setHeader('X-Request-ID', traceId);
-  // Also honour the older header name for clients that rely on it.
   res.setHeader('X-Correlation-ID', traceId);
 
-  // ── Run the remainder of the request inside the async context ──────────────
-  // Everything called via next() inherits the store, including:
-  //   • Express route handlers and middleware
-  //   • Prisma / ioredis calls (they are async, so they inherit)
-  //   • BullMQ queue.add() calls — the job metadata should also record traceId
-  //     so workers can call logWithTraceId() from the job payload
-  //   • WebSocket event handlers spawned during this request
   traceContext.run({ traceId }, () => {
-    // Log the incoming request (traceId is picked up automatically by Winston)
+    // Log the incoming request
     logger.info('Incoming request', {
       method: req.method,
       url: req.originalUrl || req.url,
+      correlationId: traceId,
       ip: req.ip || req.socket?.remoteAddress,
       userAgent: req.headers['user-agent'],
       headers: sanitizeHeaders(req.headers as Record<string, unknown>),
@@ -117,12 +111,14 @@ export const requestLogger = (req: Request, res: Response, next: NextFunction): 
       logger[level]('Request completed', {
         method: req.method,
         url: req.originalUrl || req.url,
+        correlationId: traceId,
         statusCode: res.statusCode,
         duration: `${duration}ms`,
         contentLength: res.get('Content-Length'),
         contentType: res.get('Content-Type'),
       });
 
+      clearCorrelationId();
       return originalSend(data);
     };
 
@@ -130,5 +126,14 @@ export const requestLogger = (req: Request, res: Response, next: NextFunction): 
   });
 };
 
-// Keep the old name exported for any remaining import sites
-export const detailedRequestLogger = requestLogger;
+/**
+ * Legacy request logger for simple logging compatibility.
+ */
+export const requestLogger = (req: Request, res: Response, next: NextFunction): void => {
+  const method = req.method;
+  const url = req.originalUrl || req.url;
+  const correlationId = getCorrelationId();
+
+  logger.info(`${method} ${url}`, correlationId ? { correlationId } : {});
+  next();
+};

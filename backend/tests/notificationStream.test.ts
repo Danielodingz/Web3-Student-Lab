@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach } from '@jest/globals';
 import { Response } from 'express';
-import { SseSessionManager } from '../src/sse/SseSessionManager.js';
+import { sseSessionManager as manager, SseSessionManager } from '../src/sse/SseSessionManager.js';
 import {
   _clearRecentEvents,
   _recentCount,
@@ -43,7 +43,6 @@ describe('SSE Notification Stream (#1122)', () => {
   });
 
   it('forwards targeted events to the session of the recipient user only', () => {
-    const manager = new SseSessionManager(60000);
     const aliceRes = createMockResponse();
     const bobRes = createMockResponse();
 
@@ -61,7 +60,6 @@ describe('SSE Notification Stream (#1122)', () => {
   });
 
   it('includes an id: line when an event id is provided (Last-Event-ID support)', () => {
-    const manager = new SseSessionManager(60000);
     const res = createMockResponse();
     const clientId = manager.addClient('alice', res);
 
@@ -74,7 +72,6 @@ describe('SSE Notification Stream (#1122)', () => {
   });
 
   it('broadcasts to all connected clients when no userId is targeted', () => {
-    const manager = new SseSessionManager(60000);
     const aliceRes = createMockResponse();
     const bobRes = createMockResponse();
 
@@ -95,7 +92,6 @@ describe('SSE Notification Stream (#1122)', () => {
   });
 
   it('remembers recent events per user for reconnection replay', () => {
-    const manager = new SseSessionManager(60000);
     const res = createMockResponse();
     const clientId = manager.addClient('alice', res);
 
@@ -111,7 +107,6 @@ describe('SSE Notification Stream (#1122)', () => {
   });
 
   it('replays only events with an id newer than Last-Event-ID', () => {
-    const manager = new SseSessionManager(60000);
     const res = createMockResponse();
     const clientId = manager.addClient('alice', res);
 
@@ -133,7 +128,6 @@ describe('SSE Notification Stream (#1122)', () => {
   });
 
   it('replays nothing when no Last-Event-ID is provided', () => {
-    const manager = new SseSessionManager(60000);
     const res = createMockResponse();
     const clientId = manager.addClient('alice', res);
     forwardNotification(notifMessage('notif-1', 'A', 'alice'));
@@ -146,7 +140,6 @@ describe('SSE Notification Stream (#1122)', () => {
   });
 
   it('caps the per-user replay buffer', () => {
-    const manager = new SseSessionManager(60000);
     const res = createMockResponse();
     const clientId = manager.addClient('alice', res);
 

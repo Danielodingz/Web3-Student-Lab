@@ -46,23 +46,18 @@ export function getTraceId(): string | undefined {
 
 // ─── Backward-compatible helpers (kept for callsites that used the old API) ─
 
-/**
- * @deprecated Use traceContext.run() in middleware instead.
- *             Kept for backward compatibility — sets correlationId on the
- *             *current* sync stack only; will NOT propagate across await.
- */
-export function setCorrelationId(_id: string): void {
-  // no-op: callers should migrate to traceContext.run()
+let fallbackCorrelationId: string | undefined;
+
+export function setCorrelationId(id: string): void {
+  fallbackCorrelationId = id;
 }
 
-/** @deprecated Use getTraceId() instead. */
 export function getCorrelationId(): string | undefined {
-  return getTraceId();
+  return getTraceId() ?? fallbackCorrelationId;
 }
 
-/** @deprecated no-op — AsyncLocalStorage clears automatically. */
 export function clearCorrelationId(): void {
-  // no-op
+  fallbackCorrelationId = undefined;
 }
 
 // ─── Winston format that injects traceId into every log record ──────────────

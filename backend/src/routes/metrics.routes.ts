@@ -155,7 +155,8 @@ router.get('/performance', authenticateToken, requireAdmin, (_req: Request, res:
  *         description: Admin access required
  */
 router.get('/errors', authenticateToken, requireAdmin, (_req: Request, res: Response) => {
-  res.json({ status: 'success', data: metricsCollector.getErrorMetrics() });
+  const sanitizedErrors = metricsCollector.getErrorMetrics().map(({ message: _m, ...rest }) => rest);
+  res.json({ status: 'success', data: sanitizedErrors });
 });
 
 /**

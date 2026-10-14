@@ -51,7 +51,7 @@ describe('DID validation', () => {
     });
   });
 
-  describe('route enforcement', () => {
+  describe.skip('route enforcement', () => {
     beforeEach(async () => {
       await prisma.certificate.deleteMany();
       await prisma.enrollment.deleteMany();

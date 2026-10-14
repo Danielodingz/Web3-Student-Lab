@@ -5,6 +5,16 @@
 
 import express from 'express';
 import request from 'supertest';
+import { jest } from '@jest/globals';
+
+jest.mock('../src/middleware/auth.js', () => ({
+  authenticateToken: jest.fn((_req, _res, next) => next()),
+}));
+
+jest.mock('../src/middleware/admin.js', () => ({
+  requireAdmin: jest.fn((_req, _res, next) => next()),
+}));
+
 import metricsCollector from '../src/metrics/MetricsCollector.js';
 import workerRegistry from '../src/metrics/WorkerRegistry.js';
 import {

@@ -33,6 +33,10 @@ jest.mock('../src/middleware/auth.js', () => ({
   authenticateToken: jest.fn((req, res, next) => next()),
 }));
 
+jest.mock('../src/middleware/admin.js', () => ({
+  requireAdmin: jest.fn((req, res, next) => next()),
+}));
+
 jest.mock('../src/auth/auth.middleware.js', () => ({
   authenticate: jest.fn((req, res, next) => next()),
   optionalAuth: jest.fn((req, res, next) => next()),
@@ -329,6 +333,9 @@ function buildApp(options: {
 
   // Mock admin authorization middleware
   app.use('/metrics', (req, res, next) => {
+    if (!authEnabled) {
+      return next();
+    }
     // Public health/summary endpoint stays open
     if (req.path === '/' || req.path === '') {
       return next();

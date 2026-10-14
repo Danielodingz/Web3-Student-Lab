@@ -64,6 +64,9 @@ export class SecurityService {
     // Allow injection for tests; fall back to the application singleton.
     this.ekm = ekm ?? getEncryptionKeyManager();
 
+    // Generate initial RSA key-pair immediately
+    this.rotateRsaKeys();
+
     const timer = setInterval(() => this.rotateRsaKeys(), this.RSA_ROTATION_INTERVAL_MS);
     if (typeof timer.unref === 'function') {
       timer.unref();
@@ -124,6 +127,9 @@ export class SecurityService {
    * Clients use this to encrypt short payloads before sending them to the API.
    */
   public getPublicKey(): { keyId: string; publicKey: string } | null {
+    if (!this.currentKeyId) {
+      this.rotateRsaKeys();
+    }
     if (!this.currentKeyId) return null;
     const kp = this.keyMap.get(this.currentKeyId);
     if (!kp) return null;

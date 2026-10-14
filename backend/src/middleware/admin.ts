@@ -13,7 +13,7 @@ export const requireAdmin = (req: Request, res: Response, next: NextFunction): v
     return;
   }
 
-  if (user.role !== 'admin') {
+  if (user.role?.toLowerCase() !== 'admin') {
     res.status(403).json(ApiResponse.error('Admin access required'));
     return;
   }

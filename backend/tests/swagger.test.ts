@@ -103,8 +103,8 @@ const REQUIRED_TAGS = ['System', 'Health', 'Auth', 'Learning', 'Certificates', '
 describe('Swagger / OpenAPI Specification', () => {
   // --- Metadata ---
   describe('Metadata', () => {
-    it('should declare OpenAPI 3.0.0', () => {
-      expect(swaggerSpec.openapi).toBe('3.0.0');
+    it('should declare OpenAPI 3.1.0', () => {
+      expect(swaggerSpec.openapi).toBe('3.1.0');
     });
 
     it('should have correct info metadata', () => {
@@ -237,7 +237,7 @@ describe('Swagger / OpenAPI Specification', () => {
         if (!ep) return;
         const hasAuth =
           Array.isArray(ep.security) &&
-          ep.security.some((s: any) => 'bearerAuth' in s);
+          ep.security.some((s: any) => 'bearerAuth' in s || 'metricsToken' in s);
         if (expected.requiresAuth) {
           expect(hasAuth).toBe(true);
         } else {
