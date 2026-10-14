@@ -45,8 +45,6 @@ Cargo.lock
 /package-lock.json
 pnpm-lock.yaml
 yarn.lock
-# Vercel frontend project needs its own lockfile
-!frontend/pnpm-lock.yaml
 
 # testing
 coverage/
