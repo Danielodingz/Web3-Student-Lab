@@ -77,6 +77,27 @@ function parseRoadmap(filePath: string): Issue[] {
   return issues;
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getExistingIssueIds(): Set<string> {
+  const existing = new Set<string>();
+  try {
+    const raw = execSync('gh issue list --limit 300 --state all --json title', { encoding: 'utf-8' });
+    const list = JSON.parse(raw);
+    for (const item of list) {
+      const match = item.title.match(/^\[(FE-\d+|BE-\d+|SC-\d+)\]/);
+      if (match) {
+        existing.add(match[1]);
+      }
+    }
+  } catch (err: any) {
+    console.warn('⚠️ Could not query existing issues, proceeding with manual tracking:', err.message);
+  }
+  return existing;
+}
+
 async function main() {
   const isDryRun = process.argv.includes('--dry-run');
   const isSample = process.argv.includes('--sample');
@@ -93,14 +114,20 @@ async function main() {
     issues = issues.filter((iss) => ['FE-001', 'BE-001', 'SC-001'].includes(iss.id));
   }
 
-  console.log(`Processing ${issues.length} deployment issue(s)...`);
+  const existingIds = getExistingIssueIds();
+  console.log(`Found ${existingIds.size} already created deployment issue(s) on GitHub.`);
+
+  const pendingIssues = issues.filter((iss) => !existingIds.has(iss.id));
+  console.log(`Processing ${pendingIssues.length} pending deployment issue(s) (total in catalog: ${issues.length})...`);
 
   const tmpDir = path.resolve(process.cwd(), '.tmp_issues');
   if (!existsSync(tmpDir)) {
     mkdirSync(tmpDir, { recursive: true });
   }
 
-  for (const issue of issues) {
+  let count = 0;
+  for (const issue of pendingIssues) {
+    count++;
     const isFrontend = issue.id.startsWith('FE');
     const isBackend = issue.id.startsWith('BE');
 
@@ -149,24 +176,38 @@ ${issue.acceptanceCriteria.map((ac) => `- [ ] ${ac}`).join('\n')}
     writeFileSync(tmpFile, body, 'utf-8');
 
     if (isDryRun) {
-      console.log(`[DRY RUN] Would create: "${fullTitle}" with ${labelArgs}`);
+      console.log(`[DRY RUN ${count}/${pendingIssues.length}] Would create: "${fullTitle}" with ${labelArgs}`);
     } else {
-      console.log(`Pushing to GitHub: "${fullTitle}"...`);
-      try {
-        const cmd = `gh issue create --title "${fullTitle.replace(/"/g, '\\"')}" --body-file "${tmpFile}" ${labelArgs}`;
-        const output = execSync(cmd, { encoding: 'utf-8' });
-        console.log(` Created: ${output.trim()}`);
-      } catch (err: any) {
-        console.error(`❌ Failed to create ${issue.id}:`, err?.message || err);
-      } finally {
-        if (existsSync(tmpFile)) {
-          unlinkSync(tmpFile);
+      console.log(`[${count}/${pendingIssues.length}] Pushing to GitHub: "${fullTitle}"...`);
+      let success = false;
+      let attempts = 0;
+
+      while (!success && attempts < 3) {
+        attempts++;
+        try {
+          const cmd = `gh issue create --title "${fullTitle.replace(/"/g, '\\"')}" --body-file "${tmpFile}" ${labelArgs}`;
+          const output = execSync(cmd, { encoding: 'utf-8' });
+          console.log(`  ✓ Created: ${output.trim()}`);
+          success = true;
+        } catch (err: any) {
+          console.error(`  ⚠️ Attempt ${attempts} failed for ${issue.id}: ${err?.message || err}`);
+          if (attempts < 3) {
+            console.log('  Waiting 5 seconds before retry...');
+            await sleep(5000);
+          }
         }
       }
+
+      if (existsSync(tmpFile)) {
+        unlinkSync(tmpFile);
+      }
+
+      // 1.2s delay to avoid secondary rate limits from GitHub API
+      await sleep(1200);
     }
   }
 
-  console.log('Finished!');
+  console.log('🎉 Finished creating all requested issues!');
 }
 
 main().catch(console.error);
