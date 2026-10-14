@@ -3,10 +3,10 @@
  * using the GitHub CLI (`gh`).
  *
  * Usage:
- *   npx tsx scripts/create-github-issues.ts [--dry-run]
+ *   npx tsx scripts/create-github-issues.ts [--sample] [--dry-run] [--id FE-001]
  */
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, unlinkSync, mkdirSync, existsSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import path from 'node:path';
 
@@ -33,7 +33,7 @@ function parseRoadmap(filePath: string): Issue[] {
 
     const lines = block.split('\n');
     const title = lines[0].trim();
-    
+
     let category = '';
     let difficulty = '';
     let priority = '';
@@ -41,8 +41,6 @@ function parseRoadmap(filePath: string): Issue[] {
     let specification = '';
     let files = '';
     const acceptanceCriteria: string[] = [];
-
-    let currentSection = '';
 
     for (let j = 1; j < lines.length; j++) {
       const line = lines[j].trim();
@@ -81,26 +79,39 @@ function parseRoadmap(filePath: string): Issue[] {
 
 async function main() {
   const isDryRun = process.argv.includes('--dry-run');
-  const roadmapPath = path.resolve(process.cwd(), 'DEPLOYMENT_ISSUES_ROADMAP.md');
-  const issues = parseRoadmap(roadmapPath);
+  const isSample = process.argv.includes('--sample');
+  const idArgIndex = process.argv.indexOf('--id');
+  const targetId = idArgIndex !== -1 ? process.argv[idArgIndex + 1] : null;
 
-  console.log(`Parsed ${issues.length} deployment issues from roadmap.`);
+  const roadmapPath = path.resolve(process.cwd(), 'DEPLOYMENT_ISSUES_ROADMAP.md');
+  let issues = parseRoadmap(roadmapPath);
+
+  if (targetId) {
+    issues = issues.filter((iss) => iss.id === targetId);
+  } else if (isSample) {
+    // Pick 1 representative issue from each section: FE-001, BE-001, SC-001
+    issues = issues.filter((iss) => ['FE-001', 'BE-001', 'SC-001'].includes(iss.id));
+  }
+
+  console.log(`Processing ${issues.length} deployment issue(s)...`);
+
+  const tmpDir = path.resolve(process.cwd(), '.tmp_issues');
+  if (!existsSync(tmpDir)) {
+    mkdirSync(tmpDir, { recursive: true });
+  }
 
   for (const issue of issues) {
-    const section = issue.id.startsWith('FE')
-      ? 'Frontend'
-      : issue.id.startsWith('BE')
-      ? 'Backend'
-      : 'Contract';
+    const isFrontend = issue.id.startsWith('FE');
+    const isBackend = issue.id.startsWith('BE');
 
-    const labelArgs = [
-      `--label "${section.toLowerCase()}"`,
-      `--label "production-readiness"`,
-      issue.difficulty ? `--label "difficulty:${issue.difficulty.toLowerCase().trim()}"` : '',
-      issue.priority ? `--label "priority:${issue.priority.toLowerCase().trim()}"` : '',
-    ]
-      .filter(Boolean)
-      .join(' ');
+    const labels = [
+      isFrontend ? 'frontend' : isBackend ? 'backend' : 'smart-contract',
+      isFrontend ? 'feature' : isBackend ? 'infrastructure' : 'soroban',
+      'complexity-hard',
+      'open-source-ready',
+    ];
+
+    const labelArgs = labels.map((l) => `--label "${l}"`).join(' ');
 
     const body = `## 📋 Overview
 - **Identifier:** \`${issue.id}\`
@@ -132,22 +143,28 @@ ${issue.acceptanceCriteria.map((ac) => `- [ ] ${ac}`).join('\n')}
 *Created as part of the Web3 Student Lab Post-Wave Production Deployment Initiative.*`;
 
     const fullTitle = `[${issue.id}] ${issue.title}`;
+    const tmpFile = path.join(tmpDir, `${issue.id}.md`);
+    writeFileSync(tmpFile, body, 'utf-8');
 
     if (isDryRun) {
-      console.log(`[DRY RUN] Would create: ${fullTitle} with labels: ${labelArgs}`);
+      console.log(`[DRY RUN] Would create: "${fullTitle}" with ${labelArgs}`);
     } else {
-      console.log(`Creating: ${fullTitle}...`);
+      console.log(`Pushing to GitHub: "${fullTitle}"...`);
       try {
-        const cmd = `gh issue create --title "${fullTitle.replace(/"/g, '\\"')}" --body "${body.replace(/"/g, '\\"')}" ${labelArgs}`;
+        const cmd = `gh issue create --title "${fullTitle.replace(/"/g, '\\"')}" --body-file "${tmpFile}" ${labelArgs}`;
         const output = execSync(cmd, { encoding: 'utf-8' });
-        console.log(`Created: ${output.trim()}`);
+        console.log(` Created: ${output.trim()}`);
       } catch (err: any) {
-        console.error(`Failed to create ${issue.id}:`, err?.message || err);
+        console.error(`❌ Failed to create ${issue.id}:`, err?.message || err);
+      } finally {
+        if (existsSync(tmpFile)) {
+          unlinkSync(tmpFile);
+        }
       }
     }
   }
 
-  console.log('Done!');
+  console.log('Finished!');
 }
 
 main().catch(console.error);
