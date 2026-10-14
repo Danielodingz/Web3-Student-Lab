@@ -109,6 +109,7 @@ async function main() {
       isFrontend ? 'feature' : isBackend ? 'infrastructure' : 'soroban',
       'complexity-hard',
       'open-source-ready',
+      'eta-2-days',
     ];
 
     const labelArgs = labels.map((l) => `--label "${l}"`).join(' ');
@@ -118,6 +119,7 @@ async function main() {
 - **Domain Category:** ${issue.category}
 - **Difficulty:** ${issue.difficulty}
 - **Deployment Priority:** ${issue.priority}
+- **Estimated Time of Completion (ETA):** 2 Days (48 Hours)
 
 ---
 
