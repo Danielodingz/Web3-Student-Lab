@@ -1,6 +1,6 @@
 'use client';
 
-import { QuorumSliceExplorer, SCPVisualizer, NetworkPartitionTester } from '@/components/stellar-scp';
+import { QuorumSliceExplorer, SCPVisualizer } from '@/components/stellar-scp';
 
 export default function SCPPage() {
   return (
@@ -41,12 +41,6 @@ export default function SCPPage() {
               safety and liveness recomputed as the student cuts it. */}
           <div className="mt-10">
             <QuorumSliceExplorer />
-          </div>
-
-          {/* Network partition tester (Issue FE-HARD-28): simulate network
-              splits and observe consensus safety and liveness under faults. */}
-          <div className="mt-10">
-            <NetworkPartitionTester />
           </div>
         </div>
 
