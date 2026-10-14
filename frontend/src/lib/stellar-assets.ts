@@ -1,6 +1,5 @@
 import {
   Horizon,
-  Server,
   TransactionBuilder,
   Asset,
   Operation,
@@ -15,7 +14,7 @@ import {
 import { getPublicEnv } from './env';
 
 const HORIZON_URL = getPublicEnv().horizonUrl;
-const server = new Server(HORIZON_URL);
+const server = new Horizon.Server(HORIZON_URL);
 
 export interface StellarAssetInfo {
   code: string;

@@ -184,6 +184,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 setUser(null);
                 setToken(null);
               }
+              const publicPaths = ['/', '/auth/login', '/auth'];
+              if (!publicPaths.includes(window.location.pathname)) {
+                window.location.href = '/auth/login';
+              }
             }
           }
         }

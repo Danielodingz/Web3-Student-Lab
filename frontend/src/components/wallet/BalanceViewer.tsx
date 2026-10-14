@@ -2,7 +2,7 @@
 
 import { useWallet } from '@/contexts/WalletContext';
 import { getPublicEnv } from '@/lib/env';
-import { Server } from '@stellar/stellar-sdk';
+import { Horizon } from '@stellar/stellar-sdk';
 import { RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -93,7 +93,7 @@ export function BalanceViewer() {
     if (!publicKey) return;
 
     let active = true;
-    const server = new Server(getHorizonUrl(activeNetwork));
+    const server = new Horizon.Server(getHorizonUrl(activeNetwork));
     previousBalances.current = {};
     setBalances([]);
     setDeltas([]);
@@ -123,7 +123,7 @@ export function BalanceViewer() {
   const handleRefresh = async () => {
     if (!publicKey) return;
     setIsRefreshing(true);
-    await refreshBalances(new Server(getHorizonUrl(activeNetwork)), publicKey, true);
+    await refreshBalances(new Horizon.Server(getHorizonUrl(activeNetwork)), publicKey, true);
     setIsRefreshing(false);
   };
 

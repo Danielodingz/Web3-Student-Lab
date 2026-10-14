@@ -18,6 +18,36 @@ export interface AuthResponse {
   user: User;
   token: string;
   accessToken?: string;
+  refreshToken?: string;
+}
+
+export interface NormalizedAuthResponse {
+  user: User;
+  token: string;
+  accessToken?: string;
+  refreshToken?: string;
+}
+
+export function normalizeAuthResponse(response: unknown): NormalizedAuthResponse {
+  const source = (response as { data?: Record<string, unknown> } | null)?.data ?? response;
+  const obj = source as Record<string, unknown> | null;
+  if (!obj) {
+    throw new Error('Invalid auth response: missing user');
+  }
+  const user = obj.user as User;
+  if (!user) {
+    throw new Error('Invalid auth response: missing user');
+  }
+  const token = (obj.token as string) ?? (obj.accessToken as string);
+  if (!token) {
+    throw new Error('Invalid auth response: missing token');
+  }
+  return {
+    user,
+    token,
+    accessToken: (obj.accessToken as string) ?? token,
+    refreshToken: obj.refreshToken as string | undefined,
+  };
 }
 
 export interface LoginRequest {

@@ -25,8 +25,17 @@ test.beforeEach(async ({ page }) => {
   // Suppress the "Backend Warming Up" modal (RenderWarningModal), which
   // otherwise covers the whole viewport on every fresh session and blocks
   // clicks — unrelated to anything under test here.
+  // Also clear the API request cache from localStorage to ensure each test
+  // gets a fresh /auth/me response without stale cached data leaking between
+  // tests.
   await page.addInitScript(() => {
     window.sessionStorage.setItem('render_warning_seen', 'true');
+    window.localStorage.removeItem('render_warning_seen');
+    Object.keys(window.localStorage).forEach((key) => {
+      if (key.startsWith('web3-student-lab-api-cache:')) {
+        window.localStorage.removeItem(key);
+      }
+    });
   });
 });
 
@@ -155,7 +164,7 @@ test.describe('session recovery and logout', () => {
     await mockCurrentUser(page, null); // /auth/me now rejects with 401
     await loginAs(page, '/simulator', user);
 
-    await page.waitForURL('**/auth/login');
+    await expect(page).toHaveURL(/\/auth\/login$/, { timeout: 10_000 });
     const [token, storedUser] = await page.evaluate(() => [
       window.localStorage.getItem('token'),
       window.localStorage.getItem('user'),
@@ -182,7 +191,7 @@ test.describe('session recovery and logout', () => {
       await page.getByLabel(/sign out/i).click();
     }
 
-    await page.waitForURL('**/auth/login');
+    await expect(page).toHaveURL(/\/auth\/login$/, { timeout: 10_000 });
     const [token, storedUser] = await page.evaluate(() => [
       window.localStorage.getItem('token'),
       window.localStorage.getItem('user'),

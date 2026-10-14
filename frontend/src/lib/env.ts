@@ -339,7 +339,24 @@ let cached: PublicEnv | null = null;
 export function getPublicEnv(): PublicEnv {
   if (cached) return cached;
 
-  const { env, errors } = validatePublicEnv();
+  const source: Record<string, string | undefined> = {
+    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
+    NEXT_PUBLIC_WS_URL: process.env.NEXT_PUBLIC_WS_URL,
+    NEXT_PUBLIC_SOROBAN_RPC_URL: process.env.NEXT_PUBLIC_SOROBAN_RPC_URL,
+    NEXT_PUBLIC_HORIZON_URL: process.env.NEXT_PUBLIC_HORIZON_URL,
+    NEXT_PUBLIC_CERTIFICATE_CONTRACT_ID: process.env.NEXT_PUBLIC_CERTIFICATE_CONTRACT_ID,
+    NEXT_PUBLIC_WEBRTC_ICE_SERVERS: process.env.NEXT_PUBLIC_WEBRTC_ICE_SERVERS,
+    NEXT_PUBLIC_APP_VERSION: process.env.NEXT_PUBLIC_APP_VERSION,
+    NEXT_PUBLIC_BUILD_NUMBER: process.env.NEXT_PUBLIC_BUILD_NUMBER,
+    NEXT_PUBLIC_FRONTEND_URL: process.env.NEXT_PUBLIC_FRONTEND_URL,
+    NEXT_PUBLIC_CSP_REPORT_URI: process.env.NEXT_PUBLIC_CSP_REPORT_URI,
+    NEXT_PUBLIC_CSP_REPORT_ONLY: process.env.NEXT_PUBLIC_CSP_REPORT_ONLY,
+    NEXT_PUBLIC_TURNSTILE_SITE_KEY: process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY,
+    NEXT_PUBLIC_BRIDGE_ENDPOINTS: process.env.NEXT_PUBLIC_BRIDGE_ENDPOINTS,
+    NODE_ENV: process.env.NODE_ENV,
+  };
+
+  const { env, errors } = validatePublicEnv(source as NodeJS.ProcessEnv);
 
   if (errors.length > 0) {
     const message = `Invalid frontend runtime configuration:\n- ${errors.join('\n- ')}`;

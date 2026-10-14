@@ -6,9 +6,6 @@ const withBundleAnalyzer = process.env.ANALYZE === 'true'
   : (config: NextConfig) => config;
 
 const nextConfig: NextConfig = {
-  // Enable standalone output for minimal Docker images — FE-HARD-50
-  output: 'standalone',
-  outputFileTracingRoot: path.join(__dirname, '../'),
   reactCompiler: true,
   transpilePackages: ['recharts'],
 
@@ -17,6 +14,8 @@ const nextConfig: NextConfig = {
       path.join(__dirname, 'node_modules'),
       ...(Array.isArray(config.resolve.modules) ? config.resolve.modules : ['node_modules']),
     ];
+
+    config.plugins = config.plugins || [];
 
     if (config.output) {
       config.output.environment = {
@@ -105,7 +104,7 @@ const nextConfig: NextConfig = {
     ];
   },
   experimental: {
-    optimizePackageImports: ['@stellar/stellar-sdk', 'd3', 'lucide-react'],
+    optimizePackageImports: ['d3', 'lucide-react'],
   },
 };
 

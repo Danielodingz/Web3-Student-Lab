@@ -27,8 +27,10 @@ test.describe('wallet onboarding', () => {
 
   test('restores wallet state into the transaction state chart', async ({
     page,
+    installWalletMocks,
     stellarAddress,
   }) => {
+    await installWalletMocks();
     await page.addInitScript(
       ({ address }) => {
         window.sessionStorage.setItem('local_storage_cleared', 'true');
