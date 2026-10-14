@@ -100,6 +100,7 @@ pub struct CrossChainClient;
 #[contractimpl]
 impl CrossChainClient {
     /// Initialize the client with an admin address.
+    #[allow(clippy::too_many_arguments)]
     pub fn init(env: Env, admin: Address) {
         if env.storage().instance().has(&ClientKey::Admin) {
             panic_with_error!(&env, ClientError::AlreadyInitialized);
@@ -186,6 +187,7 @@ impl CrossChainClient {
     }
 
     /// Submit a block header and validate that enough validators signed the block hash.
+    #[allow(clippy::too_many_arguments)]
     pub fn submit_block_header(
         env: Env,
         caller: Address,
@@ -563,17 +565,3 @@ impl CrossChainClient {
 
 #[cfg(test)]
 mod test;
-
-// ── Storage TTL (SC-HARD-16) ─────────────────────────────────────────────────
-// Bump instance storage lifetime on every contract execution to prevent
-// automatic archival. Target: > 100,000 ledgers per acceptance criteria.
-
-const SC16_TTL_THRESHOLD: u32 = 10_000;
-const SC16_INSTANCE_BUMP: u32 = 100_000;
-
-#[inline(always)]
-fn sc16_bump_instance(env: &Env) {
-    env.storage()
-        .instance()
-        .extend_ttl(SC16_TTL_THRESHOLD, SC16_INSTANCE_BUMP);
-}

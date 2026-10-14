@@ -86,6 +86,7 @@ pub mod topic {
 ///
 /// Topics: `(TRADE, trader)`
 /// Data: `(action, tokens, reserve, supply_after, reserve_after, fee, ts)`
+#[allow(clippy::too_many_arguments)]
 pub fn publish_trade(
     env: &Env,
     trader: &Address,
@@ -551,7 +552,7 @@ pub fn event_data(env: &Env, data: &Val) -> Vec<Val> {
         }
         Err(_) => {
             let mut out = Vec::new(env);
-            out.push_back(data.clone());
+            out.push_back(*data);
             out
         }
     }
@@ -825,27 +826,26 @@ mod tests {
     fn raw_events(env: &Env) -> std::vec::Vec<(std::vec::Vec<Val>, std::vec::Vec<Val>)> {
         let mut out = std::vec::Vec::new();
         for e in env.events().all().events() {
-            if let xdr::ContractEventBody::V0(v0) = &e.body {
-                let topics: Vec<Val> = Vec::try_from_val(env, &v0.topics).unwrap();
-                let payload: Vec<Val> = Vec::try_from_val(env, &v0.data).unwrap_or_else(|_| {
-                    let mut v = Vec::new(env);
-                    v.push_back(Val::try_from_val(env, &v0.data).unwrap());
-                    v
-                });
-                let mut t = std::vec::Vec::new();
-                let mut i = 0u32;
-                while i < topics.len() {
-                    t.push(topics.get(i).unwrap());
-                    i += 1;
-                }
-                let mut p = std::vec::Vec::new();
-                let mut j = 0u32;
-                while j < payload.len() {
-                    p.push(payload.get(j).unwrap());
-                    j += 1;
-                }
-                out.push((t, p));
+            let xdr::ContractEventBody::V0(v0) = &e.body;
+            let topics: Vec<Val> = Vec::try_from_val(env, &v0.topics).unwrap();
+            let payload: Vec<Val> = Vec::try_from_val(env, &v0.data).unwrap_or_else(|_| {
+                let mut v = Vec::new(env);
+                v.push_back(Val::try_from_val(env, &v0.data).unwrap());
+                v
+            });
+            let mut t = std::vec::Vec::new();
+            let mut i = 0u32;
+            while i < topics.len() {
+                t.push(topics.get(i).unwrap());
+                i += 1;
             }
+            let mut p = std::vec::Vec::new();
+            let mut j = 0u32;
+            while j < payload.len() {
+                p.push(payload.get(j).unwrap());
+                j += 1;
+            }
+            out.push((t, p));
         }
         out
     }
@@ -1040,18 +1040,4 @@ mod tests {
         let xfer = decode_transfer(&env, topics, data);
         assert_eq!(xfer.amount, 123);
     }
-}
-
-// ── Storage TTL (SC-HARD-16) ─────────────────────────────────────────────────
-// Bump instance storage lifetime on every contract execution to prevent
-// automatic archival. Target: > 100,000 ledgers per acceptance criteria.
-
-const SC16_TTL_THRESHOLD: u32 = 10_000;
-const SC16_INSTANCE_BUMP: u32 = 100_000;
-
-#[inline(always)]
-fn sc16_bump_instance(env: &Env) {
-    env.storage()
-        .instance()
-        .extend_ttl(SC16_TTL_THRESHOLD, SC16_INSTANCE_BUMP);
 }

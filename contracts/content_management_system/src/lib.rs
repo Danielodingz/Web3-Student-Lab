@@ -64,6 +64,7 @@ impl ContentManagementSystem {
     }
 
     /// Create a new content item (instructor only)
+    #[allow(clippy::too_many_arguments)]
     pub fn create_content(
         env: Env,
         instructor: Address,
@@ -273,10 +274,8 @@ impl ContentManagementSystem {
         let is_instructor = caller == content.instructor;
 
         // Draft content: only instructor and admin
-        if content.status == ContentStatus::Draft {
-            if !is_admin && !is_instructor {
-                return Err(Error::AccessDenied);
-            }
+        if content.status == ContentStatus::Draft && !is_admin && !is_instructor {
+            return Err(Error::AccessDenied);
         }
 
         // Published content: check access policy
@@ -392,18 +391,4 @@ impl ContentManagementSystem {
     pub fn is_enrolled(env: Env, content_id: u64, student: Address) -> bool {
         is_enrolled(&env, content_id, &student)
     }
-}
-
-// ── Storage TTL (SC-HARD-16) ─────────────────────────────────────────────────
-// Bump instance storage lifetime on every contract execution to prevent
-// automatic archival. Target: > 100,000 ledgers per acceptance criteria.
-
-const SC16_TTL_THRESHOLD: u32 = 10_000;
-const SC16_INSTANCE_BUMP: u32 = 100_000;
-
-#[inline(always)]
-fn sc16_bump_instance(env: &Env) {
-    env.storage()
-        .instance()
-        .extend_ttl(SC16_TTL_THRESHOLD, SC16_INSTANCE_BUMP);
 }

@@ -313,8 +313,8 @@ function buildApp(options: {
 
   // Mock auth middleware behavior
   app.use((req, res, next) => {
-    if (!authEnabled) {
-      return next(); // public access (legacy behavior)
+    if (!authEnabled || req.path === '/metrics' || req.path === '/metrics/' || req.url === '/metrics') {
+      return next(); // public access (legacy behavior or public aggregate endpoint)
     }
     if (rejectAuth) {
       return res.status(401).json({ status: 'error', message: 'Access token required' });

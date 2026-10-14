@@ -1,4 +1,4 @@
-import { getCookieOptions, getRefreshTokenFromReq, REFRESH_TOKEN_COOKIE_NAME } from '../src/utils/cookie.js';
+import { getCookieOptions, getRefreshTokenCookieOptions, getRefreshTokenFromReq, REFRESH_TOKEN_COOKIE_NAME } from '../src/utils/cookie.js';
 import {
   generateRefreshToken,
   rotateRefreshToken,

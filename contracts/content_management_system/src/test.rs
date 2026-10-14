@@ -16,7 +16,7 @@ fn create_test_env() -> Env {
     env
 }
 
-fn setup_contract(env: &Env) -> (Address, ContentManagementSystemClient) {
+fn setup_contract(env: &'_ Env) -> (Address, ContentManagementSystemClient) {
     let admin = Address::generate(env);
     let contract_id = env.register(ContentManagementSystem, ());
     let client = ContentManagementSystemClient::new(env, &contract_id);

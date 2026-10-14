@@ -702,7 +702,7 @@ mod tests {
         env.mock_all_auths();
         let contract_id = env.register(PaymentGateway, ());
         let admin = Address::generate(&env);
-        let user = Address::generate(&env);
+        let _user = Address::generate(&env);
         let client = PaymentGatewayClient::new(&env, &contract_id);
 
         client.initialize(&admin);
@@ -733,7 +733,7 @@ mod tests {
 
     #[test]
     fn test_deposit_and_balance() {
-        let (env, _contract_id, _admin, user, client) = setup_with_user();
+        let (_env, _contract_id, _admin, user, client) = setup_with_user();
 
         client.deposit(&user, &1000);
         assert_eq!(client.get_balance(&user), 1000);
@@ -811,7 +811,7 @@ mod tests {
 
     #[test]
     fn test_pause_blocks_operations() {
-        let (env, contract_id, admin, payer, client) = setup_with_user();
+        let (env, _contract_id, admin, _payer, client) = setup_with_user();
 
         client.pause(&admin);
         assert!(client.is_paused());
@@ -847,18 +847,4 @@ mod tests {
         client.transfer_admin(&admin, &new_admin);
         assert_eq!(client.get_admin(), new_admin);
     }
-}
-
-// ── Storage TTL (SC-HARD-16) ─────────────────────────────────────────────────
-// Bump instance storage lifetime on every contract execution to prevent
-// automatic archival. Target: > 100,000 ledgers per acceptance criteria.
-
-const SC16_TTL_THRESHOLD: u32 = 10_000;
-const SC16_INSTANCE_BUMP: u32 = 100_000;
-
-#[inline(always)]
-fn sc16_bump_instance(env: &Env) {
-    env.storage()
-        .instance()
-        .extend_ttl(SC16_TTL_THRESHOLD, SC16_INSTANCE_BUMP);
 }

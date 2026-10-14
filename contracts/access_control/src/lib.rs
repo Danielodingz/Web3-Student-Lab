@@ -160,7 +160,7 @@ pub fn unpause(env: &Env, caller: &Address) {
     }
     env.storage().instance().set(&PAUSED_KEY, &false);
     env.events()
-        .publish((Symbol::new(&env, "AC_UNPAUSE"),), caller.clone());
+        .publish((Symbol::new(env, "AC_UNPAUSE"),), caller.clone());
 }
 
 // ── Role assignment (timelocked) ──────────────────────────────────────────────

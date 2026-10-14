@@ -156,7 +156,7 @@ impl PeerReviewContract {
         if env.storage().instance().has(&DataKey::Admin) {
             panic_with_error!(&env, ReviewError::AlreadyInitialized);
         }
-        if tolerance < 0 || slash_bps < 0 || slash_bps > 1_000 {
+        if !(0..=1_000).contains(&slash_bps) {
             panic_with_error!(&env, ReviewError::InvalidConfig);
         }
 
@@ -414,7 +414,7 @@ impl PeerReviewContract {
 
         let mut submission = submission;
 
-        if grades.len() == 0 {
+        if grades.is_empty() {
             // No reviews: return the pool to the creator.
             token::Client::new(&env, &read_token(&env)).transfer(
                 &env.current_contract_address(),

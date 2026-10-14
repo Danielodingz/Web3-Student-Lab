@@ -1,10 +1,9 @@
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/index.js';
 import { StellarService } from '../blockchain/stellar.service.js';
 import { PaymentRecord, Subscription, SubscriptionPlan } from '../types/subscription.types.js';
 import logger from '../utils/logger.js';
 import { redisConnection } from '../utils/redis.js';
 
-const prisma = new PrismaClient();
 const stellarService = new StellarService();
 
 export class SubscriptionService {

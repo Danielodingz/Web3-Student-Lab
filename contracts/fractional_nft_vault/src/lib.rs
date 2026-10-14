@@ -358,7 +358,7 @@ impl FractionalNftVaultContract {
         if min_bid <= 0 || duration == 0 {
             panic_with_error!(&env, VaultError::InvalidAmount);
         }
-        if read_bool(&env, DataKey::NftLocked) == false {
+        if !read_bool(&env, DataKey::NftLocked) {
             panic_with_error!(&env, VaultError::NftNotLocked);
         }
 
@@ -1612,18 +1612,4 @@ mod proptests {
             proptest::prop_assert!(pb * total <= treasury * share_b);
         }
     }
-}
-
-// ── Storage TTL (SC-HARD-16) ─────────────────────────────────────────────────
-// Bump instance storage lifetime on every contract execution to prevent
-// automatic archival. Target: > 100,000 ledgers per acceptance criteria.
-
-const SC16_TTL_THRESHOLD: u32 = 10_000;
-const SC16_INSTANCE_BUMP: u32 = 100_000;
-
-#[inline(always)]
-fn sc16_bump_instance(env: &Env) {
-    env.storage()
-        .instance()
-        .extend_ttl(SC16_TTL_THRESHOLD, SC16_INSTANCE_BUMP);
 }

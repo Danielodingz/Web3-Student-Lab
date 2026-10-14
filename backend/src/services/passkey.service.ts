@@ -10,9 +10,9 @@
 
 import { createHash, randomBytes } from 'crypto';
 import { Redis } from 'ioredis';
-import { PrismaClient } from '@prisma/client';
+import prisma from '../db/index.js';
 
-const prismaClient = new PrismaClient();
+const prismaClient = prisma;
 
 // ---------------------------------------------------------------------------
 // Types

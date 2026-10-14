@@ -100,6 +100,7 @@ impl ParametricInsuranceContract {
             .set(&DataKey::UnderwriterBalance(underwriter), &(bal + amount));
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn buy_policy(
         env: Env,
         buyer: Address,
@@ -355,10 +356,7 @@ fn locked_liability(env: &Env) -> i128 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use soroban_sdk::{
-        testutils::{Address as _, Ledger},
-        token, Address, Env, Symbol,
-    };
+    use soroban_sdk::{testutils::Address as _, token, Address, Env, Symbol};
 
     fn create_token<'a>(env: &'a Env, admin: &Address) -> (Address, token::StellarAssetClient<'a>) {
         let token_contract = env.register_stellar_asset_contract_v2(admin.clone());
@@ -626,18 +624,4 @@ mod tests {
         client.underwrite(&underwriter, &20_000);
         assert_eq!(client.solvency_ratio_bps(), 100_000);
     }
-}
-
-// ── Storage TTL (SC-HARD-16) ─────────────────────────────────────────────────
-// Bump instance storage lifetime on every contract execution to prevent
-// automatic archival. Target: > 100,000 ledgers per acceptance criteria.
-
-const SC16_TTL_THRESHOLD: u32 = 10_000;
-const SC16_INSTANCE_BUMP: u32 = 100_000;
-
-#[inline(always)]
-fn sc16_bump_instance(env: &Env) {
-    env.storage()
-        .instance()
-        .extend_ttl(SC16_TTL_THRESHOLD, SC16_INSTANCE_BUMP);
 }

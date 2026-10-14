@@ -54,7 +54,6 @@ const PAUSED_KEY: Symbol = symbol_short!("sv_pause");
 
 // ── Synthetic Asset Constants ────────────────────────────────────────────────
 const MIN_COLLATERAL_RATIO_BPS: i128 = 15_000; // 150% collateralization required
-const LIQUIDATION_THRESHOLD_BPS: i128 = 12_000; // 120% liquidation trigger
 const GLOBAL_DEBT_SHARES: Symbol = symbol_short!("debt_sh");
 const GLOBAL_DEBT_AMOUNT: Symbol = symbol_short!("debt_amt");
 
@@ -504,7 +503,7 @@ impl SmartVault {
         proposal.approvals.push_back(signer);
 
         let threshold: u32 = env.storage().instance().get(&THRESHOLD).unwrap();
-        if proposal.approvals.len() as u32 >= threshold && proposal.queued_at.is_none() {
+        if proposal.approvals.len() >= threshold && proposal.queued_at.is_none() {
             let now = env.ledger().timestamp();
             let period: u64 = env.storage().instance().get(&GOV_PERIOD).unwrap();
             let queued = now
@@ -1169,18 +1168,4 @@ mod tests {
         client.deposit(&user, &1_000_000);
         client.mint_synthetic(&user, &1_600_000);
     }
-}
-
-// ── Storage TTL (SC-HARD-16) ─────────────────────────────────────────────────
-// Bump instance storage lifetime on every contract execution to prevent
-// automatic archival. Target: > 100,000 ledgers per acceptance criteria.
-
-const SC16_TTL_THRESHOLD: u32 = 10_000;
-const SC16_INSTANCE_BUMP: u32 = 100_000;
-
-#[inline(always)]
-fn sc16_bump_instance(env: &Env) {
-    env.storage()
-        .instance()
-        .extend_ttl(SC16_TTL_THRESHOLD, SC16_INSTANCE_BUMP);
 }

@@ -145,7 +145,7 @@ impl ContinuousBondingCurveContract {
         if base_price <= 0 || slope <= 0 {
             panic_with_error!(&env, CurveError::InvalidAmount);
         }
-        if fee_bps < 0 || fee_bps > MAX_FEE_BPS {
+        if !(0..=MAX_FEE_BPS).contains(&fee_bps) {
             panic_with_error!(&env, CurveError::InvalidFee);
         }
 
@@ -181,7 +181,7 @@ impl ContinuousBondingCurveContract {
         ensure_initialized(&env);
         admin.require_auth();
         require_admin(&env, &admin);
-        if fee_bps < 0 || fee_bps > MAX_FEE_BPS {
+        if !(0..=MAX_FEE_BPS).contains(&fee_bps) {
             panic_with_error!(&env, CurveError::InvalidFee);
         }
         env.storage().instance().set(&DataKey::FeeBps, &fee_bps);
@@ -230,7 +230,7 @@ impl ContinuousBondingCurveContract {
 
         token::Client::new(&env, &read_reserve_token(&env)).transfer(
             &buyer,
-            &env.current_contract_address(),
+            env.current_contract_address(),
             &total_in,
         );
 
@@ -302,7 +302,7 @@ impl ContinuousBondingCurveContract {
 
         token::Client::new(&env, &read_reserve_token(&env)).transfer(
             &buyer,
-            &env.current_contract_address(),
+            env.current_contract_address(),
             &total_in,
         );
 
@@ -569,7 +569,7 @@ fn curve_cost(s: i128, x: i128, base: i128, slope: i128) -> Option<i128> {
     let num = base.checked_mul(delta)?;
     let denom = slope.checked_mul(FP)?;
     // round up
-    Some(num.checked_add(denom - 1)?.checked_div(denom)?)
+    num.checked_add(denom - 1)?.checked_div(denom)
 }
 
 /// Reserve paid out when burning `x` tokens from supply `s`:
@@ -877,23 +877,22 @@ mod tests {
         use soroban_sdk::{xdr, TryFromVal, Val, Vec};
         let mut out = std::vec::Vec::new();
         for e in env.events().all().events() {
-            if let xdr::ContractEventBody::V0(v0) = &e.body {
-                let topics: Vec<Val> = Vec::try_from_val(env, &v0.topics).unwrap();
-                let payload: Vec<Val> = Vec::try_from_val(env, &v0.data).unwrap_or_else(|_| {
-                    let mut v = Vec::new(env);
-                    v.push_back(Val::try_from_val(env, &v0.data).unwrap());
-                    v
-                });
-                let mut t = std::vec::Vec::new();
-                for i in 0..topics.len() {
-                    t.push(topics.get(i).unwrap());
-                }
-                let mut p = std::vec::Vec::new();
-                for i in 0..payload.len() {
-                    p.push(payload.get(i).unwrap());
-                }
-                out.push((t, p));
+            let xdr::ContractEventBody::V0(v0) = &e.body;
+            let topics: Vec<Val> = Vec::try_from_val(env, &v0.topics).unwrap();
+            let payload: Vec<Val> = Vec::try_from_val(env, &v0.data).unwrap_or_else(|_| {
+                let mut v = Vec::new(env);
+                v.push_back(Val::try_from_val(env, &v0.data).unwrap());
+                v
+            });
+            let mut t = std::vec::Vec::new();
+            for i in 0..topics.len() {
+                t.push(topics.get(i).unwrap());
             }
+            let mut p = std::vec::Vec::new();
+            for i in 0..payload.len() {
+                p.push(payload.get(i).unwrap());
+            }
+            out.push((t, p));
         }
         out
     }
@@ -1044,18 +1043,4 @@ mod proptests {
             }
         }
     }
-}
-
-// ── Storage TTL (SC-HARD-16) ─────────────────────────────────────────────────
-// Bump instance storage lifetime on every contract execution to prevent
-// automatic archival. Target: > 100,000 ledgers per acceptance criteria.
-
-const SC16_TTL_THRESHOLD: u32 = 10_000;
-const SC16_INSTANCE_BUMP: u32 = 100_000;
-
-#[inline(always)]
-fn sc16_bump_instance(env: &Env) {
-    env.storage()
-        .instance()
-        .extend_ttl(SC16_TTL_THRESHOLD, SC16_INSTANCE_BUMP);
 }

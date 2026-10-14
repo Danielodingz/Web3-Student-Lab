@@ -10,7 +10,8 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, panic_with_error, Address, BytesN, Env,
+    contract, contracterror, contractimpl, contracttype, panic_with_error, Address, BytesN,
+    ContractExecutable, Env,
 };
 
 /// Storage keys specifically for the Proxy/Admin logic, matching the `proxy` crate.
@@ -55,7 +56,7 @@ impl StudentRecordV1 {
             .set(&ProxyDataKey::ImplementationWasm, &new_implementation);
 
         env.deployer()
-            .update_current_contract_wasm(new_implementation);
+            .update_current_contract(ContractExecutable::Wasm(new_implementation));
     }
 
     pub fn get_implementation(env: Env) -> BytesN<32> {
@@ -116,17 +117,3 @@ impl StudentRecordV1 {
 
 #[cfg(test)]
 mod tests;
-
-// ── Storage TTL (SC-HARD-16) ─────────────────────────────────────────────────
-// Bump instance storage lifetime on every contract execution to prevent
-// automatic archival. Target: > 100,000 ledgers per acceptance criteria.
-
-const SC16_TTL_THRESHOLD: u32 = 10_000;
-const SC16_INSTANCE_BUMP: u32 = 100_000;
-
-#[inline(always)]
-fn sc16_bump_instance(env: &Env) {
-    env.storage()
-        .instance()
-        .extend_ttl(SC16_TTL_THRESHOLD, SC16_INSTANCE_BUMP);
-}

@@ -4,8 +4,8 @@
 //!   * Easy:     foreign `BridgeHeader` struct can be submitted and read back.
 //!   * Medium:   block hash storage and lookup by (chain_id, block_number).
 //!   * Advanced: Merkle inclusion proof verification against a submitted
-//!               header's state root, with validator-signature consensus
-//!               gating which headers are accepted.
+//!   * header's state root, with validator-signature consensus
+//!   * gating which headers are accepted.
 
 use super::*;
 use soroban_sdk::testutils::{Address as _, Ledger as _};

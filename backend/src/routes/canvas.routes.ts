@@ -1,10 +1,10 @@
-import { Prisma, PrismaClient } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 import { Request, Response, Router } from 'express';
 import { authenticate } from '../auth/auth.middleware.js';
 import { getQueryString } from '../utils/queryParams.js';
+import prisma from '../db/index.js';
 
 const router: ReturnType<typeof Router> = Router();
-const prisma = new PrismaClient();
 
 function asStringArray(value: Prisma.JsonValue | null | undefined): string[] {
   if (!Array.isArray(value)) return [];

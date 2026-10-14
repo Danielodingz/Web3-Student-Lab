@@ -41,9 +41,9 @@ fn test_worker_registration() {
     let (env, _, _, _, _, client) = setup();
     let worker = Address::generate(&env);
 
-    assert_eq!(client.is_worker_registered(&worker), false);
+    assert!(!client.is_worker_registered(&worker));
     client.register_worker(&worker);
-    assert_eq!(client.is_worker_registered(&worker), true);
+    assert!(client.is_worker_registered(&worker));
 }
 
 #[test]

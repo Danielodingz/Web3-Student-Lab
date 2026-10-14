@@ -315,7 +315,7 @@ impl PrSimulation {
     ///
     /// This view is callable by anyone (no auth) so the playground can
     /// pre-validate changes before submitting a full simulation.
-    pub fn classify_change(env: Env, change: StorageChange) -> ChangeSeverity {
+    pub fn classify_change(_env: Env, change: StorageChange) -> ChangeSeverity {
         // If types are identical, the change is always safe.
         if change.old_type == change.new_type {
             return ChangeSeverity::Safe;
@@ -758,18 +758,4 @@ mod tests {
         let record = client.get_simulation(&id).unwrap();
         assert_eq!(record.verdict, ChangeSeverity::Breaking);
     }
-}
-
-// ── Storage TTL (SC-HARD-16) ─────────────────────────────────────────────────
-// Bump instance storage lifetime on every contract execution to prevent
-// automatic archival. Target: > 100,000 ledgers per acceptance criteria.
-
-const SC16_TTL_THRESHOLD: u32 = 10_000;
-const SC16_INSTANCE_BUMP: u32 = 100_000;
-
-#[inline(always)]
-fn sc16_bump_instance(env: &Env) {
-    env.storage()
-        .instance()
-        .extend_ttl(SC16_TTL_THRESHOLD, SC16_INSTANCE_BUMP);
 }
