@@ -1,12 +1,24 @@
 import { spawn } from 'node:child_process';
+import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import Ioredis from 'ioredis';
 import logger from '../utils/logger.js';
 import { markMigrationsApplied } from './readinessMonitor.js';
 import { MigrationLockClient, withMigrationLock } from './migrationLock.js';
 
-const backendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
+function getBackendRoot(): string {
+  if (process.env.BACKEND_ROOT) return process.env.BACKEND_ROOT;
+  const cwd = process.cwd();
+  if (fs.existsSync(path.resolve(cwd, 'prisma/schema.prisma'))) {
+    return cwd;
+  }
+  if (fs.existsSync(path.resolve(cwd, 'backend/prisma/schema.prisma'))) {
+    return path.resolve(cwd, 'backend');
+  }
+  return cwd;
+}
+
+const backendRoot = getBackendRoot();
 
 function shouldSkip(): boolean {
   return process.env.NODE_ENV === 'test' || process.env.SKIP_STARTUP_MIGRATIONS === '1';

@@ -1,34 +1,34 @@
 import { jest } from '@jest/globals';
 
-const courseFindMany = jest.fn();
-const courseCount = jest.fn();
-const courseCreate = jest.fn();
-const learningProgressFindUnique = jest.fn();
-const learningProgressUpsert = jest.fn();
-const studentActivityCreate = jest.fn().mockResolvedValue({});
-const webhookSubscriptionFindMany = jest.fn().mockResolvedValue([]);
-const studentFindUnique = jest.fn().mockResolvedValue(null);
+const mockCourseFindMany = jest.fn();
+const mockCourseCount = jest.fn();
+const mockCourseCreate = jest.fn();
+const mockLearningProgressFindUnique = jest.fn();
+const mockLearningProgressUpsert = jest.fn();
+const mockStudentActivityCreate = jest.fn().mockResolvedValue({});
+const mockWebhookSubscriptionFindMany = jest.fn().mockResolvedValue([]);
+const mockStudentFindUnique = jest.fn().mockResolvedValue(null);
 
 jest.mock('../src/db/index.js', () => ({
   __esModule: true,
   default: {
     course: {
-      findMany: courseFindMany,
-      count: courseCount,
-      create: courseCreate,
+      findMany: mockCourseFindMany,
+      count: mockCourseCount,
+      create: mockCourseCreate,
     },
     learningProgress: {
-      findUnique: learningProgressFindUnique,
-      upsert: learningProgressUpsert,
+      findUnique: mockLearningProgressFindUnique,
+      upsert: mockLearningProgressUpsert,
     },
     studentActivity: {
-      create: studentActivityCreate,
+      create: mockStudentActivityCreate,
     },
     webhookSubscription: {
-      findMany: webhookSubscriptionFindMany,
+      findMany: mockWebhookSubscriptionFindMany,
     },
     student: {
-      findUnique: studentFindUnique,
+      findUnique: mockStudentFindUnique,
     },
   },
 }));
@@ -69,7 +69,7 @@ describe('Learning data-source transparency (#911)', () => {
 
   it('reports dataSource "live" when the database responds normally', async () => {
     const { listCourses } = await import('../src/routes/learning/learning.service.js');
-    courseFindMany.mockResolvedValue([
+    mockCourseFindMany.mockResolvedValue([
       {
         id: 'course-1',
         title: 'Real Course',
@@ -89,7 +89,7 @@ describe('Learning data-source transparency (#911)', () => {
   it('reports dataSource "demo" and logs the failure instead of masquerading as live data on DB outage', async () => {
     const { listCourses } = await import('../src/routes/learning/learning.service.js');
     const logger = (await import('../src/utils/logger.js')).default;
-    courseFindMany.mockRejectedValue(new Error('connection refused'));
+    mockCourseFindMany.mockRejectedValue(new Error('connection refused'));
 
     const result = await listCourses();
     expect(result.dataSource).toBe('demo');
@@ -118,8 +118,8 @@ describe('Learning data-source transparency (#911)', () => {
       createdAt: new Date(),
       updatedAt: new Date(),
     });
-    learningProgressFindUnique.mockResolvedValue(null);
-    learningProgressUpsert.mockResolvedValue({
+    mockLearningProgressFindUnique.mockResolvedValue(null);
+    mockLearningProgressUpsert.mockResolvedValue({
       id: 'progress-1',
       studentId: 'student-1',
       courseId: 'course-1',
@@ -138,7 +138,7 @@ describe('Learning data-source transparency (#911)', () => {
       status: 'completed',
     });
 
-    expect(learningProgressUpsert).toHaveBeenCalledTimes(1);
+    expect(mockLearningProgressUpsert).toHaveBeenCalledTimes(1);
     expect(result.completedLessons).toContain('course-1-lesson-1');
   });
 
@@ -146,8 +146,8 @@ describe('Learning data-source transparency (#911)', () => {
     const { updateStudentProgress, ProgressPersistenceError } = await import(
       '../src/routes/learning/learning.service.js'
     );
-    learningProgressFindUnique.mockRejectedValue(new Error('down'));
-    learningProgressUpsert.mockRejectedValue(new Error('down'));
+    mockLearningProgressFindUnique.mockRejectedValue(new Error('down'));
+    mockLearningProgressUpsert.mockRejectedValue(new Error('down'));
 
     await expect(
       updateStudentProgress('student-1', 'course-1', {
@@ -157,6 +157,6 @@ describe('Learning data-source transparency (#911)', () => {
     ).rejects.toThrow(ProgressPersistenceError);
 
     // Must not have attempted to persist anything as if it succeeded.
-    expect(learningProgressUpsert).toHaveBeenCalledTimes(1);
+    expect(mockLearningProgressUpsert).toHaveBeenCalledTimes(1);
   });
 });

@@ -1,13 +1,13 @@
 import { jest } from '@jest/globals';
 import { computeCertificateContentHash } from '../src/certificates/ContentHash.js';
 
-const findFirst = jest.fn();
+const mockFindFirst = jest.fn();
 
 jest.mock('../src/db/index.js', () => ({
   __esModule: true,
   default: {
     certificate: {
-      findFirst,
+      findFirst: mockFindFirst,
     },
   },
 }));
@@ -50,7 +50,7 @@ describe('VerificationService — content-hash tamper detection (#913)', () => {
     const { verificationService } = await import('../src/certificates/VerificationService.js');
     const contentHash = computeCertificateContentHash(baseCertificate);
 
-    findFirst.mockResolvedValue({ ...baseCertificate, contentHash });
+    mockFindFirst.mockResolvedValue({ ...baseCertificate, contentHash });
 
     const result = await verificationService.verifyByTokenId('token-1');
     expect(result.status).not.toBe('TAMPERED');
@@ -63,7 +63,7 @@ describe('VerificationService — content-hash tamper detection (#913)', () => {
 
     // Simulate tampering: the grade stored in the DB no longer matches
     // what was hashed at mint time, but the stale contentHash remains.
-    findFirst.mockResolvedValue({ ...baseCertificate, grade: 'A+', contentHash: storedHash });
+    mockFindFirst.mockResolvedValue({ ...baseCertificate, grade: 'A+', contentHash: storedHash });
 
     const result = await verificationService.verifyByTokenId('token-1');
 
@@ -75,7 +75,7 @@ describe('VerificationService — content-hash tamper detection (#913)', () => {
 
   it('treats a certificate with no stored content hash as unverified, not tampered', async () => {
     const { verificationService } = await import('../src/certificates/VerificationService.js');
-    findFirst.mockResolvedValue({ ...baseCertificate, contentHash: null });
+    mockFindFirst.mockResolvedValue({ ...baseCertificate, contentHash: null });
 
     const result = await verificationService.verifyByTokenId('token-1');
     expect(result.status).not.toBe('TAMPERED');
@@ -85,7 +85,7 @@ describe('VerificationService — content-hash tamper detection (#913)', () => {
     const { verificationService } = await import('../src/certificates/VerificationService.js');
     const contentHash = computeCertificateContentHash(baseCertificate);
 
-    findFirst.mockResolvedValue({
+    mockFindFirst.mockResolvedValue({
       ...baseCertificate,
       status: 'REVOKED',
       contentHash,

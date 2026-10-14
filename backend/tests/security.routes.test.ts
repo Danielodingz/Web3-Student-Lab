@@ -39,17 +39,17 @@ const KEY_V2_HEX = '000000000000000000000000000000000000000000000000000000000000
 
 // We want fine-grained control per-test; expose a setter for the mock behaviour.
 type AuthBehaviour = 'unauthenticated' | 'regular' | 'admin';
-let authBehaviour: AuthBehaviour = 'admin';
+let mockAuthBehaviour: AuthBehaviour = 'admin';
 
 jest.mock('../src/middleware/auth.js', () => ({
   authenticateToken: (req: Request, _res: Response, next: NextFunction) => {
-    if (authBehaviour === 'unauthenticated') {
+    if (mockAuthBehaviour === 'unauthenticated') {
       return _res.status(401).json({ status: 'error', message: 'Access token required' });
     }
     (req as Request & { user?: { id: string; email: string; role: string } }).user = {
       id: 'user-1',
       email: 'test@example.com',
-      role: authBehaviour === 'admin' ? 'admin' : 'student',
+      role: mockAuthBehaviour === 'admin' ? 'admin' : 'student',
     };
     next();
   },
@@ -127,7 +127,7 @@ describe('GET /api/v1/security/public-key', () => {
 
 describe('GET /api/v1/security/key-versions', () => {
   it('returns key version metadata for an admin user', async () => {
-    authBehaviour = 'admin';
+    mockAuthBehaviour = 'admin';
     const res = await request(app).get('/api/v1/security/key-versions').expect(200);
 
     expect(res.body.status).toBe('success');
@@ -146,13 +146,13 @@ describe('GET /api/v1/security/key-versions', () => {
   });
 
   it('returns 403 for a non-admin authenticated user', async () => {
-    authBehaviour = 'regular';
+    mockAuthBehaviour = 'regular';
     const res = await request(app).get('/api/v1/security/key-versions').expect(403);
     expect(res.body.status).toBe('error');
   });
 
   it('returns 401 for an unauthenticated request', async () => {
-    authBehaviour = 'unauthenticated';
+    mockAuthBehaviour = 'unauthenticated';
     await request(app).get('/api/v1/security/key-versions').expect(401);
   });
 });
@@ -163,11 +163,11 @@ describe('GET /api/v1/security/key-versions', () => {
 
 describe('POST /api/v1/security/rotate-payloads', () => {
   beforeAll(() => {
-    authBehaviour = 'admin';
+    mockAuthBehaviour = 'admin';
   });
 
   it('migrates a v1 envelope and skips an already-current v2 envelope', async () => {
-    authBehaviour = 'admin';
+    mockAuthBehaviour = 'admin';
     const res = await request(app)
       .post('/api/v1/security/rotate-payloads')
       .send({
@@ -199,7 +199,7 @@ describe('POST /api/v1/security/rotate-payloads', () => {
   });
 
   it('returns an error entry for a malformed envelope without aborting the batch', async () => {
-    authBehaviour = 'admin';
+    mockAuthBehaviour = 'admin';
     const res = await request(app)
       .post('/api/v1/security/rotate-payloads')
       .send({
@@ -221,7 +221,7 @@ describe('POST /api/v1/security/rotate-payloads', () => {
   });
 
   it('returns 400 when items array is missing', async () => {
-    authBehaviour = 'admin';
+    mockAuthBehaviour = 'admin';
     const res = await request(app)
       .post('/api/v1/security/rotate-payloads')
       .send({})
@@ -232,7 +232,7 @@ describe('POST /api/v1/security/rotate-payloads', () => {
   });
 
   it('returns 400 when items array is empty', async () => {
-    authBehaviour = 'admin';
+    mockAuthBehaviour = 'admin';
     const res = await request(app)
       .post('/api/v1/security/rotate-payloads')
       .send({ items: [] })
@@ -242,7 +242,7 @@ describe('POST /api/v1/security/rotate-payloads', () => {
   });
 
   it('returns 400 when batch exceeds ENCRYPTION_ROTATION_BATCH_SIZE', async () => {
-    authBehaviour = 'admin';
+    mockAuthBehaviour = 'admin';
     const oversizedBatch = Array.from({ length: 11 }, (_, i) => ({
       id: `row-${i}`,
       envelopeStr: v2Envelope,
@@ -257,7 +257,7 @@ describe('POST /api/v1/security/rotate-payloads', () => {
   });
 
   it('returns 403 for a non-admin user', async () => {
-    authBehaviour = 'regular';
+    mockAuthBehaviour = 'regular';
     const res = await request(app)
       .post('/api/v1/security/rotate-payloads')
       .send({ items: [{ id: 'x', envelopeStr: v2Envelope }] })
@@ -267,7 +267,7 @@ describe('POST /api/v1/security/rotate-payloads', () => {
   });
 
   it('returns 401 for an unauthenticated request', async () => {
-    authBehaviour = 'unauthenticated';
+    mockAuthBehaviour = 'unauthenticated';
     await request(app)
       .post('/api/v1/security/rotate-payloads')
       .send({ items: [{ id: 'x', envelopeStr: v2Envelope }] })
@@ -275,7 +275,7 @@ describe('POST /api/v1/security/rotate-payloads', () => {
   });
 
   it('does not expose plaintext or key material in the response body', async () => {
-    authBehaviour = 'admin';
+    mockAuthBehaviour = 'admin';
     const res = await request(app)
       .post('/api/v1/security/rotate-payloads')
       .send({ items: [{ id: 'check', envelopeStr: v1Envelope }] })
@@ -294,7 +294,7 @@ describe('POST /api/v1/security/rotate-payloads', () => {
 
 describe('POST /api/v1/security/reload-keys', () => {
   it('returns the active version and loaded versions for an admin user', async () => {
-    authBehaviour = 'admin';
+    mockAuthBehaviour = 'admin';
     const res = await request(app)
       .post('/api/v1/security/reload-keys')
       .expect(200);
@@ -305,12 +305,12 @@ describe('POST /api/v1/security/reload-keys', () => {
   });
 
   it('returns 403 for a non-admin user', async () => {
-    authBehaviour = 'regular';
+    mockAuthBehaviour = 'regular';
     await request(app).post('/api/v1/security/reload-keys').expect(403);
   });
 
   it('returns 401 for an unauthenticated request', async () => {
-    authBehaviour = 'unauthenticated';
+    mockAuthBehaviour = 'unauthenticated';
     await request(app).post('/api/v1/security/reload-keys').expect(401);
   });
 });

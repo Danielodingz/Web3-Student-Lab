@@ -1,18 +1,19 @@
 import { jest } from '@jest/globals';
 
-const findUnique = jest.fn();
-const update = jest.fn();
-const auditLogCreate = jest.fn().mockResolvedValue({});
+const mockFindUnique = jest.fn();
+const mockUpdate = jest.fn();
+const mockAuditLogCreate = jest.fn().mockResolvedValue({});
 
 jest.mock('../src/db/index.js', () => ({
   __esModule: true,
   default: {
     certificate: {
-      findUnique,
-      update,
+      findUnique: mockFindUnique,
+      update: mockUpdate,
     },
     auditLog: {
-      create: auditLogCreate,
+      findFirst: jest.fn().mockResolvedValue(null),
+      create: mockAuditLogCreate,
     },
   },
 }));
@@ -48,13 +49,13 @@ describe('RevocationService — authorization and audit trail (#914)', () => {
     const { RevocationService } = await import('../src/certificates/RevocationService.js');
     const service = new RevocationService();
 
-    findUnique.mockResolvedValue({
+    mockFindUnique.mockResolvedValue({
       id: 'cert-1',
       status: 'ACTIVE',
       studentId: 'student-1',
       courseId: 'course-1',
     });
-    update.mockResolvedValue({
+    mockUpdate.mockResolvedValue({
       id: 'cert-1',
       status: 'REVOKED',
       revokedBy: AUTHORIZED_DID,
@@ -68,8 +69,8 @@ describe('RevocationService — authorization and audit trail (#914)', () => {
     });
 
     expect(result.status).toBe('REVOKED');
-    expect(auditLogCreate).toHaveBeenCalledTimes(1);
-    const auditPayload = auditLogCreate.mock.calls[0][0].data;
+    expect(mockAuditLogCreate).toHaveBeenCalledTimes(1);
+    const auditPayload = mockAuditLogCreate.mock.calls[0][0].data;
     expect(auditPayload.action).toBe('CERTIFICATE_REVOKED');
     expect(auditPayload.entityId).toBe('cert-1');
     expect(auditPayload.details.priorStatus).toBe('ACTIVE');
@@ -82,7 +83,7 @@ describe('RevocationService — authorization and audit trail (#914)', () => {
     );
     const service = new RevocationService();
 
-    findUnique.mockResolvedValue({
+    mockFindUnique.mockResolvedValue({
       id: 'cert-2',
       status: 'ACTIVE',
       studentId: 'student-1',
@@ -97,9 +98,9 @@ describe('RevocationService — authorization and audit trail (#914)', () => {
       })
     ).rejects.toThrow(UnauthorizedIssuerError);
 
-    expect(update).not.toHaveBeenCalled();
-    expect(auditLogCreate).toHaveBeenCalledTimes(1);
-    const auditPayload = auditLogCreate.mock.calls[0][0].data;
+    expect(mockUpdate).not.toHaveBeenCalled();
+    expect(mockAuditLogCreate).toHaveBeenCalledTimes(1);
+    const auditPayload = mockAuditLogCreate.mock.calls[0][0].data;
     expect(auditPayload.action).toBe('CERTIFICATE_REVOKE_FAILED');
     expect(auditPayload.details.actorDid).toBe(UNAUTHORIZED_DID);
   });
@@ -108,7 +109,7 @@ describe('RevocationService — authorization and audit trail (#914)', () => {
     const { RevocationService } = await import('../src/certificates/RevocationService.js');
     const service = new RevocationService();
 
-    findUnique.mockResolvedValue({
+    mockFindUnique.mockResolvedValue({
       id: 'cert-3',
       status: 'ACTIVE',
       studentId: 'student-1',
@@ -118,7 +119,7 @@ describe('RevocationService — authorization and audit trail (#914)', () => {
       contractAddress: 'GCONTRACT',
       network: 'stellar-testnet',
     });
-    update.mockResolvedValue({});
+    mockUpdate.mockResolvedValue({});
 
     (service as any).certificateService.mintCertificate = jest.fn().mockResolvedValue({
       id: 'cert-3-v2',
@@ -135,7 +136,7 @@ describe('RevocationService — authorization and audit trail (#914)', () => {
     expect(result.new.id).toBe('cert-3-v2');
     expect(result.original.status).toBe('REISSUED');
 
-    const reissueAudit = auditLogCreate.mock.calls.find(
+    const reissueAudit = mockAuditLogCreate.mock.calls.find(
       (call: any) => call[0].data.action === 'CERTIFICATE_REISSUED'
     );
     expect(reissueAudit).toBeDefined();
@@ -149,7 +150,7 @@ describe('RevocationService — authorization and audit trail (#914)', () => {
     );
     const service = new RevocationService();
 
-    findUnique.mockResolvedValue({
+    mockFindUnique.mockResolvedValue({
       id: 'cert-4',
       status: 'ACTIVE',
       studentId: 'student-1',
@@ -164,7 +165,7 @@ describe('RevocationService — authorization and audit trail (#914)', () => {
       })
     ).rejects.toThrow(UnauthorizedIssuerError);
 
-    const failureAudit = auditLogCreate.mock.calls.find(
+    const failureAudit = mockAuditLogCreate.mock.calls.find(
       (call: any) => call[0].data.action === 'CERTIFICATE_REISSUE_FAILED'
     );
     expect(failureAudit).toBeDefined();

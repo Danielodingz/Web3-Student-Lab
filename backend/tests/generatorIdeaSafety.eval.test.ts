@@ -7,7 +7,7 @@ import { jest } from '@jest/globals';
  * is safe to run in CI without API cost.
  */
 
-const createCompletion = jest.fn();
+const mockCreateCompletion = jest.fn();
 
 jest.mock('openai', () => {
   return {
@@ -15,7 +15,7 @@ jest.mock('openai', () => {
     default: class MockOpenAI {
       chat = {
         completions: {
-          create: createCompletion,
+          create: mockCreateCompletion,
         },
       };
     },
@@ -43,7 +43,7 @@ jest.mock('../src/utils/logger.js', () => ({
 }));
 
 function mockCompletionContent(content: string) {
-  createCompletion.mockResolvedValue({
+  mockCreateCompletion.mockResolvedValue({
     choices: [{ message: { content } }],
   });
 }
@@ -203,8 +203,8 @@ describe('Hackathon idea generation — guardrails eval suite (#908)', () => {
 
     await service.generateProjectIdea('theme', ['React'], 'Beginner');
 
-    expect(createCompletion).toHaveBeenCalledTimes(1);
-    const call = createCompletion.mock.calls[0][0] as any;
+    expect(mockCreateCompletion).toHaveBeenCalledTimes(1);
+    const call = mockCreateCompletion.mock.calls[0][0] as any;
     const systemMessage = call.messages.find((m: any) => m.role === 'system');
     expect(systemMessage).toBeDefined();
     expect(systemMessage.content).toMatch(/cannot be overridden/i);

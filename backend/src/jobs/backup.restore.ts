@@ -183,7 +183,7 @@ async function main() {
   await restoreDatabase(options);
 }
 
-if (process.argv[1] && import.meta.url.endsWith(process.argv[1].replace(/^.*[/\\]/, ''))) {
+if (process.argv[1] && process.argv[1].includes('backup.restore')) {
   main().catch((error) => {
     console.error('Restore failed:', error);
     process.exit(1);
