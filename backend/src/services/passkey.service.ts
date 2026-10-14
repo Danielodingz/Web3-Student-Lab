@@ -10,6 +10,7 @@
 
 import { createHash, randomBytes } from 'crypto';
 import { Redis } from 'ioredis';
+import type { PrismaClient } from '@prisma/client';
 import prisma from '../db/index.js';
 
 const prismaClient = prisma;
@@ -430,7 +431,7 @@ export class PasskeyService {
         where: { userId },
       });
       if (dbCreds.length > 0) {
-        return dbCreds.map((cred) => ({
+        return dbCreds.map((cred: any) => ({
           id: cred.id,
           credentialId: cred.credentialId,
           publicKeyX: cred.publicKeyX,
