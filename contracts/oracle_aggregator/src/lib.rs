@@ -95,7 +95,9 @@ impl OracleAggregatorContract {
             .unwrap_or_else(|| Vec::new(&env));
         if !reporters.contains(&reporter) {
             reporters.push_back(reporter.clone());
-            env.storage().instance().set(&DataKey::Reporters, &reporters);
+            env.storage()
+                .instance()
+                .set(&DataKey::Reporters, &reporters);
         }
         env.storage()
             .persistent()
@@ -115,7 +117,9 @@ impl OracleAggregatorContract {
             .unwrap_or_else(|| Vec::new(&env));
         if let Some(idx) = reporters.iter().position(|r| r == reporter) {
             reporters.remove(idx as u32);
-            env.storage().instance().set(&DataKey::Reporters, &reporters);
+            env.storage()
+                .instance()
+                .set(&DataKey::Reporters, &reporters);
         }
         env.events()
             .publish((Symbol::new(&env, "reporter_removed"),), reporter);
@@ -145,10 +149,8 @@ impl OracleAggregatorContract {
             .persistent()
             .set(&DataKey::LatestReport(reporter.clone()), &report);
 
-        env.events().publish(
-            (Symbol::new(&env, "price_submitted"),),
-            (reporter, price),
-        );
+        env.events()
+            .publish((Symbol::new(&env, "price_submitted"),), (reporter, price));
     }
 
     /// Aggregates all fresh whitelisted reporter prices into a medianized

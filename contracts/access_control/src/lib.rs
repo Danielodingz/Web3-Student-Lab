@@ -16,9 +16,7 @@
 
 #![no_std]
 
-use soroban_sdk::{
-    contracterror, contracttype, symbol_short, Address, Env, Symbol,
-};
+use soroban_sdk::{contracterror, contracttype, symbol_short, Address, Env, Symbol};
 
 // ── Error codes (300–399) ─────────────────────────────────────────────────────
 
@@ -101,9 +99,7 @@ pub fn initialize(env: &Env, admin: &Address) {
         env.storage()
             .instance()
             .set(&AcKey::RoleHolder(Role::Admin), admin);
-        env.storage()
-            .instance()
-            .set(&PAUSED_KEY, &false);
+        env.storage().instance().set(&PAUSED_KEY, &false);
     }
 }
 
@@ -164,7 +160,7 @@ pub fn unpause(env: &Env, caller: &Address) {
     }
     env.storage().instance().set(&PAUSED_KEY, &false);
     env.events()
-        .publish((symbol_short!("AC_UNPAUSE"),), caller.clone());
+        .publish((Symbol::new(&env, "AC_UNPAUSE"),), caller.clone());
 }
 
 // ── Role assignment (timelocked) ──────────────────────────────────────────────
@@ -193,9 +189,10 @@ pub fn queue_role_transfer(
     if has_role(env, &candidate, role) {
         soroban_sdk::panic_with_error!(env, AcError::AlreadyHasRole);
     }
-    env.storage()
-        .instance()
-        .set(&AcKey::PendingTransfer(role), &(candidate.clone(), unlock_timestamp));
+    env.storage().instance().set(
+        &AcKey::PendingTransfer(role),
+        &(candidate.clone(), unlock_timestamp),
+    );
     env.events().publish(
         (symbol_short!("AC_QROLE"),),
         (role as u32, candidate, unlock_timestamp),
@@ -211,10 +208,8 @@ pub fn queue_role_transfer(
 /// - `AcError::NoPendingTransfer` if no transfer was queued for `role`.
 /// - `AcError::TimelockNotExpired` if `now < unlock_timestamp`.
 pub fn execute_role_transfer(env: &Env, role: Role, candidate: &Address) {
-    let pending: Option<(Address, u64)> = env
-        .storage()
-        .instance()
-        .get(&AcKey::PendingTransfer(role));
+    let pending: Option<(Address, u64)> =
+        env.storage().instance().get(&AcKey::PendingTransfer(role));
 
     let (stored_candidate, unlock_at) = match pending {
         Some(p) => p,
@@ -256,9 +251,7 @@ pub fn revoke_role(env: &Env, admin: &Address, role: Role) {
     if !has_role(env, admin, Role::Admin) {
         soroban_sdk::panic_with_error!(env, AcError::Unauthorized);
     }
-    env.storage()
-        .instance()
-        .remove(&AcKey::RoleHolder(role));
+    env.storage().instance().remove(&AcKey::RoleHolder(role));
     env.events()
         .publish((symbol_short!("AC_REVOKE"),), role as u32);
 }

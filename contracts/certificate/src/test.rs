@@ -72,7 +72,10 @@ fn test_issue_certificate_success() {
     assert_eq!(record.course_id, course_id);
     assert_eq!(record.status, CertificateStatus::Active);
     assert_eq!(record.revocation_reason, String::from_str(&env, ""));
-    assert_eq!(record.previous_cert_id, BytesN::from_array(&env, &[0u8; 32]));
+    assert_eq!(
+        record.previous_cert_id,
+        BytesN::from_array(&env, &[0u8; 32])
+    );
     assert_eq!(record.content_hash, content_hash);
     assert_eq!(record.royalty_bps, 0);
     assert!(record.soulbound);

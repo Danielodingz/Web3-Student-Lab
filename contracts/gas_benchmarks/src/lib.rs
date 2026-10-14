@@ -12,6 +12,8 @@ pub use payment_gateway;
 pub use smart_vault;
 pub use soroban_hello_world as hello_world;
 
+use soroban_sdk::Env;
+
 pub mod harness;
 
 #[cfg(test)]

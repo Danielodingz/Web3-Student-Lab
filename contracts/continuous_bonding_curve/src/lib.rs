@@ -111,7 +111,9 @@ pub mod fp18 {
     /// Checked divide of two 18-decimal FP values.
     #[inline]
     pub fn div(a: i128, b: i128) -> Option<i128> {
-        if b == 0 { return None; }
+        if b == 0 {
+            return None;
+        }
         a.checked_mul(SCALE18)?.checked_div(b)
     }
 }
@@ -723,7 +725,6 @@ fn read_reserve_token(env: &Env) -> Address {
 }
 
 #[cfg(test)]
-mod tests;
 mod tests {
     use super::*;
     use soroban_sdk::{

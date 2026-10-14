@@ -163,9 +163,13 @@ impl PeerReviewContract {
         admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::Token, &token);
-        env.storage().instance().set(&DataKey::Tolerance, &tolerance);
+        env.storage()
+            .instance()
+            .set(&DataKey::Tolerance, &tolerance);
         env.storage().instance().set(&DataKey::SlashBps, &slash_bps);
-        env.storage().instance().set(&DataKey::LockSeconds, &lock_seconds);
+        env.storage()
+            .instance()
+            .set(&DataKey::LockSeconds, &lock_seconds);
         env.storage().instance().set(&DataKey::Treasury, &0i128);
         // SC-HARD-16: protect contract instance from archival.
         bump_instance(&env);
@@ -205,8 +209,11 @@ impl PeerReviewContract {
             panic_with_error!(&env, ReviewError::SubmissionExists);
         }
 
-        token::Client::new(&env, &read_token(&env))
-            .transfer(&creator, &env.current_contract_address(), &reward_pool);
+        token::Client::new(&env, &read_token(&env)).transfer(
+            &creator,
+            &env.current_contract_address(),
+            &reward_pool,
+        );
 
         let submission = Submission {
             creator: creator.clone(),
@@ -246,8 +253,11 @@ impl PeerReviewContract {
             panic_with_error!(&env, ReviewError::InvalidAmount);
         }
 
-        token::Client::new(&env, &read_token(&env))
-            .transfer(&reviewer, &env.current_contract_address(), &amount);
+        token::Client::new(&env, &read_token(&env)).transfer(
+            &reviewer,
+            &env.current_contract_address(),
+            &amount,
+        );
 
         let mut state = reviewer_state_internal(&env, &reviewer);
         state.stake += amount;
@@ -265,12 +275,7 @@ impl PeerReviewContract {
 
     /// Commit a blind review: `commitment = sha256(grade || salt)`. The
     /// grade stays hidden until the reveal phase.
-    pub fn commit_review(
-        env: Env,
-        reviewer: Address,
-        submission_id: u64,
-        commitment: BytesN<32>,
-    ) {
+    pub fn commit_review(env: Env, reviewer: Address, submission_id: u64, commitment: BytesN<32>) {
         ensure_initialized(&env);
         reviewer.require_auth();
 
@@ -455,11 +460,7 @@ impl PeerReviewContract {
             let grade = grades.get(idx).unwrap();
             if (grade - median).abs() <= tolerance {
                 if reward > 0 {
-                    token_client.transfer(
-                        &env.current_contract_address(),
-                        &reviewer,
-                        &reward,
-                    );
+                    token_client.transfer(&env.current_contract_address(), &reviewer, &reward);
                 }
             } else {
                 // Outlier: slash a share of their stake into the treasury.
@@ -481,9 +482,7 @@ impl PeerReviewContract {
 
         // Leftover reward rounding goes to the treasury.
         treasury += submission.reward_pool - reward * accurate_count as i128;
-        env.storage()
-            .instance()
-            .set(&DataKey::Treasury, &treasury);
+        env.storage().instance().set(&DataKey::Treasury, &treasury);
 
         submission.finalized = true;
         submission.median = median;
@@ -522,8 +521,11 @@ impl PeerReviewContract {
         env.storage()
             .instance()
             .set(&DataKey::Reviewer(reviewer.clone()), &state);
-        token::Client::new(&env, &read_token(&env))
-            .transfer(&env.current_contract_address(), &reviewer, &amount);
+        token::Client::new(&env, &read_token(&env)).transfer(
+            &env.current_contract_address(),
+            &reviewer,
+            &amount,
+        );
         publish_stake(&env, &reviewer, amount, state.stake, false);
         bump_instance(&env);
     }
@@ -550,8 +552,11 @@ impl PeerReviewContract {
         env.storage()
             .instance()
             .set(&DataKey::Treasury, &(treasury - amount));
-        token::Client::new(&env, &read_token(&env))
-            .transfer(&env.current_contract_address(), &to, &amount);
+        token::Client::new(&env, &read_token(&env)).transfer(
+            &env.current_contract_address(),
+            &to,
+            &amount,
+        );
         bump_instance(&env);
     }
 
@@ -688,7 +693,7 @@ fn reviewer_state_internal(env: &Env, reviewer: &Address) -> ReviewerState {
 // ── Tests (in separate file per issue requirements) ───────────────────────────
 
 #[cfg(test)]
-mod tests;
+mod test;
 
 #[cfg(test)]
 mod proptests;

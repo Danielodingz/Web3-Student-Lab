@@ -105,8 +105,10 @@ impl DIDRegistryContract {
         assert!(!doc.revoked, "DID revoked");
         assert!(doc.owner == sender, "Only owner can bind github handle");
         doc.github_handle = Some(handle);
-        doc.social_identities
-            .set(Symbol::new(&env, "github"), doc.github_handle.clone().unwrap());
+        doc.social_identities.set(
+            Symbol::new(&env, "github"),
+            doc.github_handle.clone().unwrap(),
+        );
         dids.set(did.clone(), doc);
         env.storage().persistent().set(&DataKey::DIDs, &dids);
     }
@@ -283,7 +285,8 @@ impl DIDRegistryContract {
             .persistent()
             .get(&DataKey::DIDs)
             .unwrap_or_else(|| Map::new(&env));
-        dids.get(did).and_then(|doc| doc.social_identities.get(provider))
+        dids.get(did)
+            .and_then(|doc| doc.social_identities.get(provider))
     }
 
     /// Returns the Ed25519 verification key for a DID, if set.
@@ -331,12 +334,7 @@ mod test {
         let handle = String::from_str(&env, "alice");
         client.bind_github(&owner, &did, &handle);
         let discord_handle = String::from_str(&env, "alice#1234");
-        client.bind_social(
-            &owner,
-            &did,
-            &Symbol::new(&env, "discord"),
-            &discord_handle,
-        );
+        client.bind_social(&owner, &did, &Symbol::new(&env, "discord"), &discord_handle);
         let key = BytesN::from_array(&env, &[9u8; 32]);
         client.set_verification_key(&owner, &did, &key);
 

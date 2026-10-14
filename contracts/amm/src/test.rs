@@ -2,7 +2,15 @@ use super::*;
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{token, Address, Env};
 
-fn setup(env: &Env) -> (Address, AMMContractClient<'static>, Address, Address, Address) {
+fn setup(
+    env: &Env,
+) -> (
+    Address,
+    AMMContractClient<'static>,
+    Address,
+    Address,
+    Address,
+) {
     env.mock_all_auths();
     let admin = Address::generate(env);
     let contract_id = env.register(AMMContract, ());
@@ -25,7 +33,14 @@ fn setup(env: &Env) -> (Address, AMMContractClient<'static>, Address, Address, A
     token_b_client.mint(&admin, &1_000_000_000);
 
     let fee_collector = Address::generate(env);
-    client.initialize(&admin, &token_a_id, &token_b_id, &pool_share_id, &fee_collector, &50);
+    client.initialize(
+        &admin,
+        &token_a_id,
+        &token_b_id,
+        &pool_share_id,
+        &fee_collector,
+        &50,
+    );
 
     (admin, client, token_a_id, token_b_id, pool_share_id)
 }
@@ -90,7 +105,10 @@ fn test_slippage_protection_add_liquidity() {
 
     // Request high min_shares should panic if not enough liquidity
     let result = client.try_add_liquidity(&user, &1_000, &1_000, &1_000_000_000);
-    assert!(result.is_err(), "Should panic on insufficient shares (slippage)");
+    assert!(
+        result.is_err(),
+        "Should panic on insufficient shares (slippage)"
+    );
 }
 
 #[test]
@@ -106,7 +124,10 @@ fn test_slippage_protection_swap() {
 
     // Request high min_amount_out should panic
     let result = client.try_swap_a_for_b(&user, &1_000_000, &100_000_000);
-    assert!(result.is_err(), "Should panic on insufficient output (slippage)");
+    assert!(
+        result.is_err(),
+        "Should panic on insufficient output (slippage)"
+    );
 }
 
 #[test]
@@ -128,7 +149,7 @@ fn test_remove_liquidity() {
 }
 
 #[test]
-#[should_panic(expected = "Fee must be between 10 and 1000 bps")]
+#[should_panic(expected = "Error(Contract, #402)")]
 fn test_invalid_fee_rejected() {
     let env = Env::default();
     env.mock_all_auths();
@@ -147,7 +168,14 @@ fn test_invalid_fee_rejected() {
     let fee_collector = Address::generate(&env);
 
     // Try to initialize with fee > 1000 bps (should panic)
-    client.initialize(&admin, &token_a_id, &token_b_id, &pool_share_id, &fee_collector, &2000);
+    client.initialize(
+        &admin,
+        &token_a_id,
+        &token_b_id,
+        &pool_share_id,
+        &fee_collector,
+        &2000,
+    );
 }
 
 #[test]

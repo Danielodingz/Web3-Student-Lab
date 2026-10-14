@@ -163,7 +163,9 @@ impl CommitRevealRng {
         let mut commit_blocks: Map<Address, u32> =
             env.storage().instance().get(&COMMIT_BLOCKS_KEY).unwrap();
         commit_blocks.set(participant.clone(), env.ledger().sequence());
-        env.storage().instance().set(&COMMIT_BLOCKS_KEY, &commit_blocks);
+        env.storage()
+            .instance()
+            .set(&COMMIT_BLOCKS_KEY, &commit_blocks);
 
         env.events()
             .publish((symbol_short!("committed"), participant), ());

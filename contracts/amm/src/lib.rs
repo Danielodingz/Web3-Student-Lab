@@ -9,8 +9,8 @@
 
 #![no_std]
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, panic_with_error, Address, Env, Symbol,
-    token,
+    contract, contracterror, contractimpl, contracttype, panic_with_error, token, Address, Env,
+    Symbol,
 };
 
 /// Basis points denominator (10,000 bps = 100%)
@@ -93,19 +93,29 @@ impl AMMContract {
         env.storage().instance().set(&DataKey::Admin, &admin);
         env.storage().instance().set(&DataKey::TokenA, &token_a);
         env.storage().instance().set(&DataKey::TokenB, &token_b);
-        env.storage().instance().set(&DataKey::PoolShare, &pool_share);
-        env.storage().instance().set(&DataKey::FeeCollector, &fee_collector);
-        env.storage().instance().set(&DataKey::BaseFeeBps, &base_fee_bps);
+        env.storage()
+            .instance()
+            .set(&DataKey::PoolShare, &pool_share);
+        env.storage()
+            .instance()
+            .set(&DataKey::FeeCollector, &fee_collector);
+        env.storage()
+            .instance()
+            .set(&DataKey::BaseFeeBps, &base_fee_bps);
 
         env.storage().instance().set(&DataKey::BalanceA, &0i128);
         env.storage().instance().set(&DataKey::BalanceB, &0i128);
         env.storage().instance().set(&DataKey::ReserveA, &0i128);
         env.storage().instance().set(&DataKey::ReserveB, &0i128);
         // Burn DEAD_SHARES to prevent share inflation exploits.
-        env.storage().instance().set(&DataKey::TotalShares, &DEAD_SHARES);
+        env.storage()
+            .instance()
+            .set(&DataKey::TotalShares, &DEAD_SHARES);
 
-        env.events()
-            .publish((Symbol::new(&env, "amm_initialized"),), (fee_collector, base_fee_bps));
+        env.events().publish(
+            (Symbol::new(&env, "amm_initialized"),),
+            (fee_collector, base_fee_bps),
+        );
     }
 
     /// Adds liquidity and mints pool shares. Requires equal value deposit (x * y = k maintained).
@@ -130,32 +140,59 @@ impl AMMContract {
         let pool_share_client = token::StellarAssetClient::new(&env, &pool_share);
 
         let contract_addr = env.current_contract_address();
-        token_a_client.transfer_from(&provider, &provider, &contract_addr, &amount_a);
-        token_b_client.transfer_from(&provider, &provider, &contract_addr, &amount_b);
+        token_a_client.transfer(&provider, &contract_addr, &amount_a);
+        token_b_client.transfer(&provider, &contract_addr, &amount_b);
 
-        let balance_a: i128 = env.storage().instance().get(&DataKey::BalanceA).unwrap_or(0);
-        let balance_b: i128 = env.storage().instance().get(&DataKey::BalanceB).unwrap_or(0);
+        let balance_a: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::BalanceA)
+            .unwrap_or(0);
+        let balance_b: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::BalanceB)
+            .unwrap_or(0);
         let total_shares: i128 = env.storage().instance().get(&DataKey::TotalShares).unwrap();
 
         let shares = if balance_a == 0 || balance_b == 0 {
-            // Initial liquidity: mint sqrt(amount_a * amount_b) shares.
-            Self::isqrt(amount_a * amount_b)
+            // Initial liquidity: mint sqrt(amount_a * amount_b) shares, reserving
+            // DEAD_SHARES that are permanently locked (seeded in initialize).
+            let gross = Self::isqrt(amount_a * amount_b);
+            if gross <= DEAD_SHARES {
+                panic_with_error!(&env, AmmError::InvalidAmount);
+            }
+            gross - DEAD_SHARES
         } else {
             // Subsequent liquidity: mint proportional to either ratio (use minimum).
             let shares_from_a = (amount_a * total_shares) / balance_a;
             let shares_from_b = (amount_b * total_shares) / balance_b;
-            if shares_from_a < shares_from_b { shares_from_a } else { shares_from_b }
+            if shares_from_a < shares_from_b {
+                shares_from_a
+            } else {
+                shares_from_b
+            }
         };
 
         if shares < min_shares {
             panic_with_error!(&env, AmmError::SlippageExceeded);
         }
 
-        env.storage().instance().set(&DataKey::BalanceA, &(balance_a + amount_a));
-        env.storage().instance().set(&DataKey::BalanceB, &(balance_b + amount_b));
-        env.storage().instance().set(&DataKey::ReserveA, &(balance_a + amount_a));
-        env.storage().instance().set(&DataKey::ReserveB, &(balance_b + amount_b));
-        env.storage().instance().set(&DataKey::TotalShares, &(total_shares + shares));
+        env.storage()
+            .instance()
+            .set(&DataKey::BalanceA, &(balance_a + amount_a));
+        env.storage()
+            .instance()
+            .set(&DataKey::BalanceB, &(balance_b + amount_b));
+        env.storage()
+            .instance()
+            .set(&DataKey::ReserveA, &(balance_a + amount_a));
+        env.storage()
+            .instance()
+            .set(&DataKey::ReserveB, &(balance_b + amount_b));
+        env.storage()
+            .instance()
+            .set(&DataKey::TotalShares, &(total_shares + shares));
 
         pool_share_client.mint(&provider, &shares);
 
@@ -199,12 +236,18 @@ impl AMMContract {
             panic_with_error!(&env, AmmError::SlippageExceeded);
         }
 
-        env.storage().instance().set(&DataKey::BalanceA, &(balance_a - amount_a));
-        env.storage().instance().set(&DataKey::BalanceB, &(balance_b - amount_b));
-        env.storage().instance().set(&DataKey::TotalShares, &(total_shares - shares));
+        env.storage()
+            .instance()
+            .set(&DataKey::BalanceA, &(balance_a - amount_a));
+        env.storage()
+            .instance()
+            .set(&DataKey::BalanceB, &(balance_b - amount_b));
+        env.storage()
+            .instance()
+            .set(&DataKey::TotalShares, &(total_shares - shares));
 
         let contract_addr = env.current_contract_address();
-        pool_share_client.burn(&contract_addr, &shares);
+        pool_share_client.burn(&provider, &shares);
 
         token_a_client.transfer(&contract_addr, &provider, &amount_a);
         token_b_client.transfer(&contract_addr, &provider, &amount_b);
@@ -218,12 +261,7 @@ impl AMMContract {
     }
 
     /// Swaps token A for token B with dynamic fee based on price impact.
-    pub fn swap_a_for_b(
-        env: Env,
-        user: Address,
-        amount_in: i128,
-        min_amount_out: i128,
-    ) -> i128 {
+    pub fn swap_a_for_b(env: Env, user: Address, amount_in: i128, min_amount_out: i128) -> i128 {
         user.require_auth();
         if amount_in <= 0 {
             panic_with_error!(&env, AmmError::InvalidAmount);
@@ -231,20 +269,24 @@ impl AMMContract {
 
         let token_a: Address = env.storage().instance().get(&DataKey::TokenA).unwrap();
         let token_b: Address = env.storage().instance().get(&DataKey::TokenB).unwrap();
-        let fee_collector: Address = env.storage().instance().get(&DataKey::FeeCollector).unwrap();
+        let fee_collector: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::FeeCollector)
+            .unwrap();
 
         let token_a_client = token::Client::new(&env, &token_a);
         let token_b_client = token::Client::new(&env, &token_b);
 
         let contract_addr = env.current_contract_address();
-        token_a_client.transfer_from(&user, &user, &contract_addr, &amount_in);
+        token_a_client.transfer(&user, &contract_addr, &amount_in);
 
         let balance_a: i128 = env.storage().instance().get(&DataKey::BalanceA).unwrap();
         let balance_b: i128 = env.storage().instance().get(&DataKey::BalanceB).unwrap();
         let base_fee_bps: i128 = env.storage().instance().get(&DataKey::BaseFeeBps).unwrap();
 
         let new_a = balance_a + amount_in;
-        let amount_out_before_fee = balance_b - (balance_a * balance_b) / new_a;
+        let amount_out_before_fee = balance_b - (balance_a * balance_b + new_a - 1) / new_a;
 
         let price_impact_bps = (amount_out_before_fee * BPS) / balance_b;
         let dynamic_fee_bps = base_fee_bps + (price_impact_bps / 100);
@@ -262,9 +304,13 @@ impl AMMContract {
         }
 
         env.storage().instance().set(&DataKey::BalanceA, &new_a);
-        env.storage().instance().set(&DataKey::BalanceB, &(balance_b - amount_out - fee));
+        env.storage()
+            .instance()
+            .set(&DataKey::BalanceB, &(balance_b - amount_out - fee));
         env.storage().instance().set(&DataKey::ReserveA, &new_a);
-        env.storage().instance().set(&DataKey::ReserveB, &(balance_b - amount_out - fee));
+        env.storage()
+            .instance()
+            .set(&DataKey::ReserveB, &(balance_b - amount_out - fee));
 
         let contract_addr = env.current_contract_address();
         token_b_client.transfer(&contract_addr, &user, &amount_out);
@@ -279,12 +325,7 @@ impl AMMContract {
     }
 
     /// Swaps token B for token A with dynamic fee based on price impact.
-    pub fn swap_b_for_a(
-        env: Env,
-        user: Address,
-        amount_in: i128,
-        min_amount_out: i128,
-    ) -> i128 {
+    pub fn swap_b_for_a(env: Env, user: Address, amount_in: i128, min_amount_out: i128) -> i128 {
         user.require_auth();
         if amount_in <= 0 {
             panic_with_error!(&env, AmmError::InvalidAmount);
@@ -292,20 +333,24 @@ impl AMMContract {
 
         let token_a: Address = env.storage().instance().get(&DataKey::TokenA).unwrap();
         let token_b: Address = env.storage().instance().get(&DataKey::TokenB).unwrap();
-        let fee_collector: Address = env.storage().instance().get(&DataKey::FeeCollector).unwrap();
+        let fee_collector: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::FeeCollector)
+            .unwrap();
 
         let token_a_client = token::Client::new(&env, &token_a);
         let token_b_client = token::Client::new(&env, &token_b);
 
         let contract_addr = env.current_contract_address();
-        token_b_client.transfer_from(&user, &user, &contract_addr, &amount_in);
+        token_b_client.transfer(&user, &contract_addr, &amount_in);
 
         let balance_a: i128 = env.storage().instance().get(&DataKey::BalanceA).unwrap();
         let balance_b: i128 = env.storage().instance().get(&DataKey::BalanceB).unwrap();
         let base_fee_bps: i128 = env.storage().instance().get(&DataKey::BaseFeeBps).unwrap();
 
         let new_b = balance_b + amount_in;
-        let amount_out_before_fee = balance_a - (balance_a * balance_b) / new_b;
+        let amount_out_before_fee = balance_a - (balance_a * balance_b + new_b - 1) / new_b;
 
         let price_impact_bps = (amount_out_before_fee * BPS) / balance_a;
         let dynamic_fee_bps = base_fee_bps + (price_impact_bps / 100);
@@ -322,9 +367,13 @@ impl AMMContract {
             panic_with_error!(&env, AmmError::SlippageExceeded);
         }
 
-        env.storage().instance().set(&DataKey::BalanceA, &(balance_a - amount_out - fee));
+        env.storage()
+            .instance()
+            .set(&DataKey::BalanceA, &(balance_a - amount_out - fee));
         env.storage().instance().set(&DataKey::BalanceB, &new_b);
-        env.storage().instance().set(&DataKey::ReserveA, &(balance_a - amount_out - fee));
+        env.storage()
+            .instance()
+            .set(&DataKey::ReserveA, &(balance_a - amount_out - fee));
         env.storage().instance().set(&DataKey::ReserveB, &new_b);
 
         let contract_addr = env.current_contract_address();
@@ -341,9 +390,21 @@ impl AMMContract {
 
     /// Returns current pool state for calculations and display.
     pub fn get_pool_state(env: Env) -> (i128, i128, i128) {
-        let balance_a: i128 = env.storage().instance().get(&DataKey::BalanceA).unwrap_or(0);
-        let balance_b: i128 = env.storage().instance().get(&DataKey::BalanceB).unwrap_or(0);
-        let total_shares: i128 = env.storage().instance().get(&DataKey::TotalShares).unwrap_or(0);
+        let balance_a: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::BalanceA)
+            .unwrap_or(0);
+        let balance_b: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::BalanceB)
+            .unwrap_or(0);
+        let total_shares: i128 = env
+            .storage()
+            .instance()
+            .get(&DataKey::TotalShares)
+            .unwrap_or(0);
         (balance_a, balance_b, total_shares)
     }
 

@@ -55,7 +55,8 @@ fn test_timelocked_upgrade_flow() {
     assert!(res.is_err());
 
     // Advance ledger timestamp past 48 hours
-    env.ledger().set_timestamp(env.ledger().timestamp() + TIMELOCK_DELAY + 1);
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + TIMELOCK_DELAY + 1);
 
     client.execute_upgrade(&admin, &wasm2);
 
@@ -88,7 +89,8 @@ fn test_transfer_admin() {
 
     let wasm2 = dummy_wasm_hash(&env, 2);
     client.propose_upgrade(&new_admin, &wasm2);
-    env.ledger().set_timestamp(env.ledger().timestamp() + TIMELOCK_DELAY + 10);
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + TIMELOCK_DELAY + 10);
     client.execute_upgrade(&new_admin, &wasm2);
 
     assert_eq!(client.get_impl(), wasm2);

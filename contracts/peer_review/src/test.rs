@@ -10,7 +10,7 @@
 
 use super::*;
 use soroban_sdk::{
-    testutils::{Address as _, Ledger as _},
+    testutils::{Address as _, Events as _, Ledger as _},
     token, Address, BytesN, Env,
 };
 
@@ -241,7 +241,10 @@ fn no_reviews_refunds_reward_pool() {
 fn find_event(
     env: &Env,
     topic: soroban_sdk::Symbol,
-) -> Option<(std::vec::Vec<soroban_sdk::Val>, std::vec::Vec<soroban_sdk::Val>)> {
+) -> Option<(
+    std::vec::Vec<soroban_sdk::Val>,
+    std::vec::Vec<soroban_sdk::Val>,
+)> {
     use soroban_sdk::TryFromVal;
     for (t, d) in raw_events(env) {
         if soroban_sdk::Symbol::try_from_val(env, &t[0]).ok() == Some(topic.clone()) {
@@ -254,10 +257,13 @@ fn find_event(
 /// Convert `env.events().all()` into `(topics, payload)` pairs.
 fn raw_events(
     env: &Env,
-) -> std::vec::Vec<(std::vec::Vec<soroban_sdk::Val>, std::vec::Vec<soroban_sdk::Val>)> {
+) -> std::vec::Vec<(
+    std::vec::Vec<soroban_sdk::Val>,
+    std::vec::Vec<soroban_sdk::Val>,
+)> {
     use soroban_sdk::{xdr, TryFromVal, Val, Vec};
     let mut out = std::vec::Vec::new();
-    for e in env.events().all().iter() {
+    for e in env.events().all().events().iter() {
         if let xdr::ContractEventBody::V0(v0) = &e.body {
             let topics: Vec<Val> = Vec::try_from_val(env, &v0.topics).unwrap();
             let payload: Vec<Val> = Vec::try_from_val(env, &v0.data).unwrap_or_else(|_| {

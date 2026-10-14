@@ -33,7 +33,7 @@ fn revoke_removes_verification() {
 }
 
 #[test]
-#[should_panic(expected = "User is not verified")]
+#[should_panic(expected = "Error(Contract, #462)")]
 fn revoke_unverified_panics() {
     let env = Env::default();
     env.mock_all_auths();
@@ -42,7 +42,7 @@ fn revoke_unverified_panics() {
 }
 
 #[test]
-#[should_panic(expected = "Already initialized")]
+#[should_panic(expected = "Error(Contract, #460)")]
 fn double_initialize_panics() {
     let env = Env::default();
     env.mock_all_auths();

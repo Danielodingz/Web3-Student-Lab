@@ -240,7 +240,9 @@ impl FractionalNftVaultContract {
             panic_with_error!(&env, VaultError::SoulboundNonTransferable);
         }
 
-        env.storage().instance().set(&DataKey::Soulbound, &soulbound);
+        env.storage()
+            .instance()
+            .set(&DataKey::Soulbound, &soulbound);
     }
 
     pub fn is_soulbound(env: Env) -> bool {
@@ -1007,7 +1009,6 @@ fn share_balance_internal(env: &Env, owner: &Address) -> i128 {
 }
 
 #[cfg(test)]
-mod tests;
 mod tests {
     use super::*;
     use soroban_sdk::{

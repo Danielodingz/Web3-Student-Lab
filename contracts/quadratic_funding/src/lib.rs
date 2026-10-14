@@ -116,8 +116,7 @@ impl QuadraticFunding {
         Self::assert_admin(&env, &admin);
         Self::assert_round_open(&env);
 
-        let mut projects: Map<u32, Project> =
-            env.storage().instance().get(&PROJECTS_KEY).unwrap();
+        let mut projects: Map<u32, Project> = env.storage().instance().get(&PROJECTS_KEY).unwrap();
         assert!(!projects.contains_key(project_id), "project already exists");
 
         projects.set(
@@ -139,8 +138,7 @@ impl QuadraticFunding {
     pub fn whitelist_donor(env: Env, admin: Address, donor: Address) {
         admin.require_auth();
         Self::assert_admin(&env, &admin);
-        let mut wl: Map<Address, bool> =
-            env.storage().instance().get(&WHITELIST_KEY).unwrap();
+        let mut wl: Map<Address, bool> = env.storage().instance().get(&WHITELIST_KEY).unwrap();
         wl.set(donor, true);
         env.storage().instance().set(&WHITELIST_KEY, &wl);
         bump_instance(&env);
@@ -170,8 +168,7 @@ impl QuadraticFunding {
             "donor not whitelisted"
         );
 
-        let mut projects: Map<u32, Project> =
-            env.storage().instance().get(&PROJECTS_KEY).unwrap();
+        let mut projects: Map<u32, Project> = env.storage().instance().get(&PROJECTS_KEY).unwrap();
         let mut project = projects.get(project_id).expect("project not found");
 
         // One donation per donor per project (Sybil guard).
@@ -187,8 +184,7 @@ impl QuadraticFunding {
             .expect("overflow");
 
         // sqrt_sum += isqrt(amount * SCALE²) = isqrt(amount) * SCALE
-        let sqrt_contribution =
-            Self::isqrt(amount.checked_mul(SCALE * SCALE).expect("overflow"));
+        let sqrt_contribution = Self::isqrt(amount.checked_mul(SCALE * SCALE).expect("overflow"));
         project.sqrt_sum = project
             .sqrt_sum
             .checked_add(sqrt_contribution)
@@ -325,4 +321,4 @@ pub(crate) fn bump_instance(env: &Env) {
 // ── Tests (in separate file per issue requirements) ───────────────────────────
 
 #[cfg(test)]
-mod tests;
+mod test;

@@ -435,12 +435,7 @@ impl LendingPool {
 
     /// Emergency collateral withdrawal — available even when the circuit
     /// breaker is active, so admin can recover funds during a pause.
-    pub fn emergency_withdraw(
-        env: Env,
-        user: Address,
-        collateral_token: Address,
-        amount: i128,
-    ) {
+    pub fn emergency_withdraw(env: Env, user: Address, collateral_token: Address, amount: i128) {
         user.require_auth();
         // NOTE: intentionally does NOT call check_not_paused — this is the
         // exempted emergency path (SC-HARD-19).
@@ -724,7 +719,6 @@ impl LendingPool {
 }
 
 #[cfg(test)]
-mod tests;
 mod tests {
     use super::*;
     use soroban_sdk::{testutils::Address as _, Env};

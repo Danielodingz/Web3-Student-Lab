@@ -42,18 +42,13 @@ members = [
     "zk_proof_verifier",
     "certificate",
     "storage_ttl_manager",
-<<<<<<< HEAD
-=======
     "peer_review",
     "contract_events",
 ]
 # Incomplete or non-crate directories under contracts/ must not be listed as members.
 exclude = [
->>>>>>> 8a48bd83 (feat(contracts): SC-HARD-13/14/15/16 peer review, quadratic funding, ZK verifier, TTL manager)
     "automated_testing_suite",
     "cicd_pipeline",
-    "contract_events",
-    "peer_review",
 ]
 # All contract crates are now fully reconciled into the workspace.
 
@@ -69,10 +64,10 @@ strip = true
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-soroban-sdk = "27.0.6"
+soroban-sdk = "28.0.0"
 
 [dev-dependencies]
-soroban-sdk = { version = "27.0.6", features = ["testutils"] }
+soroban-sdk = { version = "28.0.0", features = ["testutils"] }
 rand = { version = "0.9", features = ["small_rng"] }
 ed25519-dalek = { version = "2", default-features = false, features = ["std", "rand_core"] }
 proptest = "1"

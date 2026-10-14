@@ -60,8 +60,7 @@ impl SybilResistanceContract {
             .persistent()
             .set(&DataKey::VerifiedUser(user.clone()), &true);
 
-        env.events()
-            .publish((symbol_short!("usr_vrfd"),), user);
+        env.events().publish((symbol_short!("usr_vrfd"),), user);
     }
 
     /// Checks if a user has been verified as a unique human identity.
@@ -89,8 +88,7 @@ impl SybilResistanceContract {
             env.storage()
                 .persistent()
                 .remove(&DataKey::VerifiedUser(user.clone()));
-            env.events()
-                .publish((symbol_short!("usr_rvkd"),), user);
+            env.events().publish((symbol_short!("usr_rvkd"),), user);
         } else {
             panic_with_error!(&env, SybilError::NotVerified);
         }

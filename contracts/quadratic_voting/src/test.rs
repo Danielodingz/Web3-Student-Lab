@@ -87,7 +87,7 @@ fn voter_spends_quadratic_cost() {
 }
 
 #[test]
-#[should_panic(expected = "Must cast at least 1 vote")]
+#[should_panic(expected = "Error(Contract, #442)")]
 fn zero_votes_panics() {
     let env = Env::default();
     env.mock_all_auths();
@@ -98,7 +98,7 @@ fn zero_votes_panics() {
 }
 
 #[test]
-#[should_panic(expected = "Insufficient voting credits")]
+#[should_panic(expected = "Error(Contract, #444)")]
 fn insufficient_credits_panics() {
     let env = Env::default();
     env.mock_all_auths();
@@ -110,7 +110,7 @@ fn insufficient_credits_panics() {
 }
 
 #[test]
-#[should_panic(expected = "User not verified for Sybil resistance")]
+#[should_panic(expected = "Error(Contract, #445)")]
 fn unverified_voter_rejected() {
     let env = Env::default();
     env.mock_all_auths();

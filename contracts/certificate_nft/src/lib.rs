@@ -66,8 +66,7 @@ impl CertificateNFTContract {
 
         // Emit an on-chain minting event.
         // Topics: ("mint", student_addr, course_id)
-        let topics: (Symbol, Address, String) =
-            (symbol_short!("mint"), student, course_id);
+        let topics: (Symbol, Address, String) = (symbol_short!("mint"), student, course_id);
         env.events().publish(topics, metadata);
     }
 }

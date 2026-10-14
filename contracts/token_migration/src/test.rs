@@ -66,7 +66,7 @@ fn initialize_and_migrate() {
 }
 
 #[test]
-#[should_panic(expected = "Amount must be positive")]
+#[should_panic(expected = "Error(Contract, #482)")]
 fn migrate_zero_panics() {
     let env = Env::default();
     env.mock_all_auths();
@@ -75,7 +75,7 @@ fn migrate_zero_panics() {
 }
 
 #[test]
-#[should_panic(expected = "Already initialized")]
+#[should_panic(expected = "Error(Contract, #480)")]
 fn double_initialize_panics() {
     let env = Env::default();
     env.mock_all_auths();
@@ -163,7 +163,7 @@ fn cursor_batch_migrates_storage_v1_to_v2_without_data_loss() {
 }
 
 #[test]
-#[should_panic(expected = "Only admin can run storage migration")]
+#[should_panic(expected = "Error(Contract, #485)")]
 fn cursor_batch_requires_admin() {
     let env = Env::default();
     env.mock_all_auths();

@@ -135,16 +135,13 @@ fn test_get_missing_user_data_returns_none() {
 fn test_scratchpad_sum_edge_cases() {
     let (env, client, _) = setup();
 
-    assert_eq!(
-        client.scratchpad_sum(&0, &0, &Symbol::new(&env, "z")),
-        0
-    );
+    assert_eq!(client.scratchpad_sum(&0, &0, &Symbol::new(&env, "z")), 0);
     assert_eq!(
         client.scratchpad_sum(&-10, &10, &Symbol::new(&env, "neg")),
         0
     );
     assert_eq!(
-        client.scratchpad_sum(&i128::MAX / 2, &1, &Symbol::new(&env, "big")),
+        client.scratchpad_sum(&(i128::MAX / 2), &1i128, &Symbol::new(&env, "big")),
         i128::MAX / 2 + 1
     );
 }

@@ -185,7 +185,8 @@ impl CourseProxy {
             .set(&CourseProxyKey::ImplWasm, new_wasm_hash);
 
         #[cfg(not(test))]
-        env.deployer().update_current_contract_wasm(new_wasm_hash.clone());
+        env.deployer()
+            .update_current_contract_wasm(new_wasm_hash.clone());
     }
 
     fn assert_admin(env: &Env, caller: &Address) {

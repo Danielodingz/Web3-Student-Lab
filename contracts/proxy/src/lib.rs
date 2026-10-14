@@ -339,7 +339,8 @@ impl ProxyContract {
             .set(&ProxyDataKey::ImplementationWasm, wasm_hash);
 
         #[cfg(not(test))]
-        env.deployer().update_current_contract_wasm(wasm_hash.clone());
+        env.deployer()
+            .update_current_contract_wasm(wasm_hash.clone());
     }
 
     fn require_admin(env: &Env, caller: &Address) {

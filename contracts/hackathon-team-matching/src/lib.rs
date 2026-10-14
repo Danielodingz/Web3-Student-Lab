@@ -202,7 +202,7 @@ impl HackathonTeamMatching {
             .set(&DataKey::AllDevelopers, &all_devs);
 
         env.events()
-            .publish((DeveloperRegistered { developer },), ());
+            .publish_event(&DeveloperRegistered { developer });
     }
 
     /// Retrieve a developer profile
@@ -270,8 +270,11 @@ impl HackathonTeamMatching {
             .persistent()
             .set(&DataKey::Developer(creator.clone()), &creator_dev);
 
-        env.events()
-            .publish((TeamCreated { creator, team_id, name },), ());
+        env.events().publish_event(&TeamCreated {
+            creator,
+            team_id,
+            name,
+        });
         team_id
     }
 
@@ -330,7 +333,7 @@ impl HackathonTeamMatching {
         }
 
         env.events()
-            .publish((JoinRequested { developer, team_id },), ());
+            .publish_event(&JoinRequested { developer, team_id });
     }
 
     /// Accept a developer's join request (team creator only)
@@ -398,8 +401,11 @@ impl HackathonTeamMatching {
             .persistent()
             .set(&DataKey::Team(team_id), &team);
 
-        env.events()
-            .publish((JoinAccepted { creator, developer, team_id },), ());
+        env.events().publish_event(&JoinAccepted {
+            creator,
+            developer,
+            team_id,
+        });
     }
 
     /// Invite a developer to join the team (team creator only)
@@ -454,8 +460,11 @@ impl HackathonTeamMatching {
                 .set(&DataKey::Invitations(developer.clone()), &invites);
         }
 
-        env.events()
-            .publish((DeveloperInvited { creator, developer, team_id },), ());
+        env.events().publish_event(&DeveloperInvited {
+            creator,
+            developer,
+            team_id,
+        });
     }
 
     /// Accept a team's invitation (developer only)
@@ -521,7 +530,7 @@ impl HackathonTeamMatching {
             .set(&DataKey::Team(team_id), &team);
 
         env.events()
-            .publish((InvitationAccepted { developer, team_id },), ());
+            .publish_event(&InvitationAccepted { developer, team_id });
     }
 
     /// Leave the current team (non-creator member only)
@@ -574,8 +583,7 @@ impl HackathonTeamMatching {
             .persistent()
             .set(&DataKey::Team(team_id), &team);
 
-        env.events()
-            .publish((TeamLeft { developer, team_id },), ());
+        env.events().publish_event(&TeamLeft { developer, team_id });
     }
 
     /// Remove a member from the team (team creator only)
@@ -630,8 +638,11 @@ impl HackathonTeamMatching {
             .persistent()
             .set(&DataKey::Team(team_id), &team);
 
-        env.events()
-            .publish((MemberRemoved { creator, developer, team_id },), ());
+        env.events().publish_event(&MemberRemoved {
+            creator,
+            developer,
+            team_id,
+        });
     }
 
     /// Close the team, finalizing members (team creator only)
@@ -654,8 +665,7 @@ impl HackathonTeamMatching {
             .persistent()
             .set(&DataKey::Team(team_id), &team);
 
-        env.events()
-            .publish((TeamClosed { creator, team_id },), ());
+        env.events().publish_event(&TeamClosed { creator, team_id });
     }
 
     /// Find matching teams for a developer

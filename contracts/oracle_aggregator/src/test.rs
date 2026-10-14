@@ -45,7 +45,8 @@ fn test_stale_reports_excluded() {
     client.submit_price(&r1, &100);
 
     // advance ledger time beyond staleness window before r2 submits
-    env.ledger().with_mut(|li| li.timestamp += MAX_STALENESS_SECONDS + 1);
+    env.ledger()
+        .with_mut(|li| li.timestamp += MAX_STALENESS_SECONDS + 1);
     client.submit_price(&r2, &200);
 
     // r1's report is now stale and must be excluded; only r2 remains
@@ -54,7 +55,7 @@ fn test_stale_reports_excluded() {
 }
 
 #[test]
-#[should_panic(expected = "No fresh price reports available")]
+#[should_panic(expected = "Error(Contract, #425)")]
 fn test_all_stale_panics() {
     let env = Env::default();
     let (_, client) = setup(&env);
@@ -63,7 +64,8 @@ fn test_all_stale_panics() {
     client.add_reporter(&r1, &1_000);
     client.submit_price(&r1, &100);
 
-    env.ledger().with_mut(|li| li.timestamp += MAX_STALENESS_SECONDS + 1);
+    env.ledger()
+        .with_mut(|li| li.timestamp += MAX_STALENESS_SECONDS + 1);
     client.aggregate();
 }
 
@@ -96,7 +98,7 @@ fn test_outlier_excluded_and_slashed() {
 }
 
 #[test]
-#[should_panic(expected = "Reporter not whitelisted")]
+#[should_panic(expected = "Error(Contract, #424)")]
 fn test_unauthorized_reporter_rejected() {
     let env = Env::default();
     let (_, client) = setup(&env);

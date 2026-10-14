@@ -258,4 +258,4 @@ pub(crate) fn bump_instance(env: &Env) {
 // ── Tests (in separate file per issue requirements) ───────────────────────────
 
 #[cfg(test)]
-mod tests;
+mod test;

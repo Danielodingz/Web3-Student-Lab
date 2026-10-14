@@ -66,8 +66,7 @@ fn verify_block_header_rejects_unregistered_signer() {
     // before signature verification is even attempted.
     let unregistered = BytesN::from_array(&env, &[7u8; 32]);
     let signers: Vec<BytesN<32>> = Vec::from_array(&env, [unregistered]);
-    let signatures: Vec<BytesN<64>> =
-        Vec::from_array(&env, [BytesN::from_array(&env, &[0u8; 64])]);
+    let signatures: Vec<BytesN<64>> = Vec::from_array(&env, [BytesN::from_array(&env, &[0u8; 64])]);
 
     let ok = client.verify_block_header(&block_hash, &signers, &signatures);
     assert!(!ok);

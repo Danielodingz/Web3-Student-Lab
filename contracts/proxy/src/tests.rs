@@ -51,7 +51,8 @@ fn test_upgrade_to_with_timelock() {
     assert!(res.is_err());
 
     // Advance ledger timestamp past 48 hours (172,800 seconds)
-    env.ledger().set_timestamp(env.ledger().timestamp() + TIMELOCK_DELAY + 1);
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + TIMELOCK_DELAY + 1);
 
     // Call executes upgrade after timelock expiry
     client.upgrade_to(&admin, &wasm2);
@@ -131,7 +132,8 @@ fn test_storage_version_and_registered_hashes() {
 
     client.register_wasm(&admin, &wasm2);
     client.propose_upgrade(&admin, &wasm2);
-    env.ledger().set_timestamp(env.ledger().timestamp() + TIMELOCK_DELAY + 10);
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + TIMELOCK_DELAY + 10);
     client.execute_upgrade(&admin, &wasm2);
 
     assert_eq!(client.get_implementation(), wasm2);
@@ -160,7 +162,8 @@ fn test_two_step_admin_transfer() {
 
     client.register_wasm(&new_admin, &wasm2);
     client.propose_upgrade(&new_admin, &wasm2);
-    env.ledger().set_timestamp(env.ledger().timestamp() + TIMELOCK_DELAY + 1);
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + TIMELOCK_DELAY + 1);
     client.execute_upgrade(&new_admin, &wasm2);
     assert_eq!(client.get_implementation(), wasm2);
 }

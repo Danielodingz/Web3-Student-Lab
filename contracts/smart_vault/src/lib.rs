@@ -542,9 +542,9 @@ impl SmartVault {
         }
 
         let now = env.ledger().timestamp();
-        let queued_at = proposal.queued_at.unwrap_or_else(|| {
-            panic_with_error!(&env, VaultError::TimelockActive)
-        });
+        let queued_at = proposal
+            .queued_at
+            .unwrap_or_else(|| panic_with_error!(&env, VaultError::TimelockActive));
         if now < queued_at {
             panic_with_error!(&env, VaultError::TimelockNotElapsed);
         }
@@ -858,8 +858,16 @@ impl SmartVault {
     }
 
     fn get_global_debt(env: &Env) -> (i128, i128) {
-        let debt_amount = env.storage().instance().get(&GLOBAL_DEBT_AMOUNT).unwrap_or(0);
-        let debt_shares = env.storage().instance().get(&GLOBAL_DEBT_SHARES).unwrap_or(0);
+        let debt_amount = env
+            .storage()
+            .instance()
+            .get(&GLOBAL_DEBT_AMOUNT)
+            .unwrap_or(0);
+        let debt_shares = env
+            .storage()
+            .instance()
+            .get(&GLOBAL_DEBT_SHARES)
+            .unwrap_or(0);
         (debt_amount, debt_shares)
     }
 

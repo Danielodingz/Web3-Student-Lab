@@ -27,9 +27,7 @@
 //! | `INSTANCE_BUMP_LEDGERS`    | 518,400  | Matches persistent target     |
 //! | `TEMP_BUMP_LEDGERS`        | 17,280   | 1 day (scratchpads)          |
 
-use soroban_sdk::{
-    contract, contractimpl, contracttype, symbol_short, Address, Env, Symbol, Vec,
-};
+use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env, Symbol, Vec};
 
 // ── Acceptance-criteria constants ────────────────────────────────────────────
 
@@ -128,9 +126,7 @@ pub fn track_persistent_key(env: &Env, key: TTLKey) {
     }
     if !exists {
         keys.push_back(key);
-        env.storage()
-            .persistent()
-            .set(&TTLKey::TrackedKeys, &keys);
+        env.storage().persistent().set(&TTLKey::TrackedKeys, &keys);
     }
 }
 
@@ -267,4 +263,4 @@ impl StorageTTLManager {
 // ── Tests (in separate file per issue requirements) ───────────────────────────
 
 #[cfg(test)]
-mod tests;
+mod test;

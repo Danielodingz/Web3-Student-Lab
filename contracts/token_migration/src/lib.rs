@@ -228,10 +228,8 @@ impl TokenMigrationContract {
                 .unwrap_or_else(|| panic_with_error!(&env, MigError::Overflow)),
         );
 
-        env.events().publish(
-            (symbol_short!("migrated"), caller),
-            (amount, new_amount),
-        );
+        env.events()
+            .publish((symbol_short!("migrated"), caller), (amount, new_amount));
     }
 
     /// Allows the admin to withdraw any remaining legacy tokens after the deadline.
@@ -384,10 +382,7 @@ impl TokenMigrationContract {
             .instance()
             .set(&DataKey::MigrationStatus, &status);
 
-        env.events().publish(
-            (symbol_short!("stor_mig"),),
-            cursor,
-        );
+        env.events().publish((symbol_short!("stor_mig"),), cursor);
 
         cursor
     }
