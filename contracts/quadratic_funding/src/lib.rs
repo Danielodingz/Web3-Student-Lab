@@ -276,6 +276,35 @@ impl QuadraticFunding {
         env.storage().instance().get(&POOL_KEY).unwrap_or(0)
     }
 
+    // ── SC-037 Penalty Slasher & Collusion Detection ──────────────────────────
+
+    /// Deposit security stake for a donor.
+    pub fn deposit_stake(env: Env, donor: Address, amount: i128) {
+        slasher::deposit_stake(&env, &donor, amount);
+    }
+
+    /// Query current security stake for a donor.
+    pub fn get_stake(env: Env, donor: Address) -> i128 {
+        slasher::get_stake(&env, &donor)
+    }
+
+    /// Check if a donor is slashed.
+    pub fn is_slashed(env: Env, donor: Address) -> bool {
+        slasher::is_slashed(&env, &donor)
+    }
+
+    /// Slash collusive cluster accounts, disqualify donations, and award 50% bounty.
+    pub fn slash_collusion(
+        env: Env,
+        investigator: Address,
+        project_id: u32,
+        colluders: Vec<Address>,
+        proof: CollusionProof,
+    ) -> Result<i128, SlasherError> {
+        Self::assert_round_open(&env);
+        slasher::slash_collusion(&env, &investigator, project_id, &colluders, &proof)
+    }
+
     // ── Internal helpers ──────────────────────────────────────────────────────
 
     /// Integer square root via Newton's method (no floating point).
@@ -310,6 +339,14 @@ impl QuadraticFunding {
     }
 }
 
+// ── Modules ───────────────────────────────────────────────────────────────────
+
+pub mod collusion_detection;
+pub mod slasher;
+
+pub use collusion_detection::*;
+pub use slasher::*;
+
 // ── TTL helper (SC-HARD-16) ───────────────────────────────────────────────────
 
 pub(crate) fn bump_instance(env: &Env) {
@@ -322,3 +359,4 @@ pub(crate) fn bump_instance(env: &Env) {
 
 #[cfg(test)]
 mod test;
+

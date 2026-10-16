@@ -183,3 +183,128 @@ fn test_transfer_admin_revokes_old_admin() {
     client.register_wasm(&new_admin, &wasm2);
     client.upgrade_to(&admin, &wasm2);
 }
+
+// ── SC-046 Security Council Tests ─────────────────────────────────────────────
+
+fn setup_council(
+    env: &Env,
+    client: &ProxyContractClient<'static>,
+    admin: &Address,
+) -> Vec<Address> {
+    let mut members = Vec::new(env);
+    for _ in 0..5 {
+        members.push_back(Address::generate(env));
+    }
+    client.set_security_council(admin, &members);
+    members
+}
+
+fn dummy_sig(env: &Env, signer: &Address, digest: &BytesN<32>) -> CouncilSignature {
+    CouncilSignature {
+        signer: signer.clone(),
+        digest: digest.clone(),
+        signature: BytesN::from_array(env, &[1u8; 64]),
+    }
+}
+
+#[test]
+fn test_security_council_upgrade_happy_path() {
+    let (env, client, admin) = setup();
+    let wasm1 = dummy_wasm_hash(&env, 1);
+    let wasm2 = dummy_wasm_hash(&env, 2);
+
+    client.init(&admin, &wasm1);
+    client.register_wasm(&admin, &wasm2);
+
+    let members = setup_council(&env, &client, &admin);
+
+    // Announce upgrade (starts 24-hour timelock)
+    let unlock_at = client.announce_upgrade(&admin, &wasm2);
+    assert_eq!(unlock_at, env.ledger().timestamp() + ANNOUNCEMENT_TIMELOCK);
+
+    // Prepare 3 valid signatures
+    let mut sigs = Vec::new(&env);
+    sigs.push_back(dummy_sig(&env, &members.get(0).unwrap(), &wasm2));
+    sigs.push_back(dummy_sig(&env, &members.get(1).unwrap(), &wasm2));
+    sigs.push_back(dummy_sig(&env, &members.get(2).unwrap(), &wasm2));
+
+    // Fast-forward past 24 hours
+    env.ledger().set_timestamp(unlock_at + 1);
+
+    // Execute upgrade with 3 valid signatures
+    client.execute_security_council_upgrade(&admin, &wasm2, &sigs);
+
+    assert_eq!(client.get_implementation(), wasm2);
+    assert_eq!(client.get_storage_version(), 2);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #108)")]
+fn test_security_council_rejects_before_24h_timelock() {
+    let (env, client, admin) = setup();
+    let wasm1 = dummy_wasm_hash(&env, 1);
+    let wasm2 = dummy_wasm_hash(&env, 2);
+
+    client.init(&admin, &wasm1);
+    client.register_wasm(&admin, &wasm2);
+
+    let members = setup_council(&env, &client, &admin);
+    client.announce_upgrade(&admin, &wasm2);
+
+    let mut sigs = Vec::new(&env);
+    sigs.push_back(dummy_sig(&env, &members.get(0).unwrap(), &wasm2));
+    sigs.push_back(dummy_sig(&env, &members.get(1).unwrap(), &wasm2));
+    sigs.push_back(dummy_sig(&env, &members.get(2).unwrap(), &wasm2));
+
+    // Try executing immediately before 24-hour timelock expiry (panics with TimelockNotExpired #108)
+    client.execute_security_council_upgrade(&admin, &wasm2, &sigs);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #105)")]
+fn test_security_council_rejects_less_than_3_signatures() {
+    let (env, client, admin) = setup();
+    let wasm1 = dummy_wasm_hash(&env, 1);
+    let wasm2 = dummy_wasm_hash(&env, 2);
+
+    client.init(&admin, &wasm1);
+    client.register_wasm(&admin, &wasm2);
+
+    let members = setup_council(&env, &client, &admin);
+    let unlock_at = client.announce_upgrade(&admin, &wasm2);
+    env.ledger().set_timestamp(unlock_at + 1);
+
+    // Only 2 signatures submitted
+    let mut sigs = Vec::new(&env);
+    sigs.push_back(dummy_sig(&env, &members.get(0).unwrap(), &wasm2));
+    sigs.push_back(dummy_sig(&env, &members.get(1).unwrap(), &wasm2));
+
+    // Panics with ThresholdNotMet #105
+    client.execute_security_council_upgrade(&admin, &wasm2, &sigs);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #106)")]
+fn test_security_council_rejects_digest_mismatch() {
+    let (env, client, admin) = setup();
+    let wasm1 = dummy_wasm_hash(&env, 1);
+    let wasm2 = dummy_wasm_hash(&env, 2);
+    let wrong_wasm = dummy_wasm_hash(&env, 99);
+
+    client.init(&admin, &wasm1);
+    client.register_wasm(&admin, &wasm2);
+
+    let members = setup_council(&env, &client, &admin);
+    let unlock_at = client.announce_upgrade(&admin, &wasm2);
+    env.ledger().set_timestamp(unlock_at + 1);
+
+    // Signatures sign wrong digest
+    let mut sigs = Vec::new(&env);
+    sigs.push_back(dummy_sig(&env, &members.get(0).unwrap(), &wrong_wasm));
+    sigs.push_back(dummy_sig(&env, &members.get(1).unwrap(), &wrong_wasm));
+    sigs.push_back(dummy_sig(&env, &members.get(2).unwrap(), &wrong_wasm));
+
+    // Panics with DigestMismatch #106
+    client.execute_security_council_upgrade(&admin, &wasm2, &sigs);
+}
+
