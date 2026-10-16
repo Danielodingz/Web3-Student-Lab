@@ -17,7 +17,7 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short, Address,
+    contract, contractimpl, contracttype, panic_with_error, symbol_short, Address,
     Env, String,
 };
 
@@ -57,22 +57,8 @@ pub enum Key {
     Vote(u64, Address),
 }
 
-// ── Errors ────────────────────────────────────────────────────────────────────
-
-#[contracterror]
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-pub enum DaoError {
-    AlreadyInitialized = 1,
-    NotInitialized = 2,
-    Unauthorized = 3,
-    ProposalNotFound = 4,
-    ProposalClosed = 5,
-    VotingDeadlineLive = 6,
-    AlreadyVoted = 7,
-    InsufficientCredits = 8,
-    ZeroVotes = 9,
-    InvalidDeadline = 10,
-}
+pub mod errors;
+pub use errors::DaoError;
 
 // ── Contract ──────────────────────────────────────────────────────────────────
 
@@ -354,7 +340,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Error(Contract, #7)")]
+    #[should_panic(expected = "Error(Contract, #407)")]
     fn cannot_vote_twice() {
         let (env, client, admin) = setup();
         let voter = Address::generate(&env);
@@ -371,7 +357,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Error(Contract, #8)")]
+    #[should_panic(expected = "Error(Contract, #408)")]
     fn insufficient_credits_rejected() {
         let (env, client, admin) = setup();
         let voter = Address::generate(&env);
@@ -386,3 +372,6 @@ mod tests {
         client.vote(&voter, &pid, &5i64); // cost = 25 > 3 → panic
     }
 }
+
+#[cfg(test)]
+mod test;

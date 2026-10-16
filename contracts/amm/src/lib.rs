@@ -9,7 +9,7 @@
 
 #![no_std]
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, panic_with_error, token, Address, Env,
+    contract, contracterror, contractimpl, panic_with_error, token, Address, Env,
     Symbol,
 };
 
@@ -45,28 +45,10 @@ pub enum AmmError {
     NotInitialized = 404,
 }
 
-#[contracttype]
-pub enum DataKey {
-    Admin,
-    TokenA,
-    TokenB,
-    /// Share token address.
-    PoolShare,
-    /// Current balance of token A.
-    BalanceA,
-    /// Current balance of token B.
-    BalanceB,
-    /// Virtual reserve (for sandwich protection).
-    ReserveA,
-    /// Virtual reserve (for sandwich protection).
-    ReserveB,
-    /// Total pool shares issued.
-    TotalShares,
-    /// Address for collecting swap fees.
-    FeeCollector,
-    /// Base swap fee (in basis points).
-    BaseFeeBps,
-}
+pub mod storage;
+pub mod twap;
+
+pub use storage::DataKey;
 
 #[contract]
 pub struct AMMContract;
@@ -194,6 +176,8 @@ impl AMMContract {
             .instance()
             .set(&DataKey::TotalShares, &(total_shares + shares));
 
+        twap::update_cumulative_prices(&env, balance_a + amount_a, balance_b + amount_b);
+
         pool_share_client.mint(&provider, &shares);
 
         env.events().publish(
@@ -244,7 +228,15 @@ impl AMMContract {
             .set(&DataKey::BalanceB, &(balance_b - amount_b));
         env.storage()
             .instance()
+            .set(&DataKey::ReserveA, &(balance_a - amount_a));
+        env.storage()
+            .instance()
+            .set(&DataKey::ReserveB, &(balance_b - amount_b));
+        env.storage()
+            .instance()
             .set(&DataKey::TotalShares, &(total_shares - shares));
+
+        twap::update_cumulative_prices(&env, balance_a - amount_a, balance_b - amount_b);
 
         let contract_addr = env.current_contract_address();
         pool_share_client.burn(&provider, &shares);
@@ -312,6 +304,8 @@ impl AMMContract {
             .instance()
             .set(&DataKey::ReserveB, &(balance_b - amount_out - fee));
 
+        twap::update_cumulative_prices(&env, new_a, balance_b - amount_out - fee);
+
         let contract_addr = env.current_contract_address();
         token_b_client.transfer(&contract_addr, &user, &amount_out);
         token_b_client.transfer(&contract_addr, &fee_collector, &fee);
@@ -376,6 +370,8 @@ impl AMMContract {
             .set(&DataKey::ReserveA, &(balance_a - amount_out - fee));
         env.storage().instance().set(&DataKey::ReserveB, &new_b);
 
+        twap::update_cumulative_prices(&env, balance_a - amount_out - fee, new_b);
+
         let contract_addr = env.current_contract_address();
         token_a_client.transfer(&contract_addr, &user, &amount_out);
         token_a_client.transfer(&contract_addr, &fee_collector, &fee);
@@ -406,6 +402,32 @@ impl AMMContract {
             .get(&DataKey::TotalShares)
             .unwrap_or(0);
         (balance_a, balance_b, total_shares)
+    }
+
+    /// Returns current cumulative prices and last block timestamp for TWAP oracle consumers.
+    pub fn get_twap_cumulative(env: Env) -> (i128, i128, u64) {
+        let price_a: i128 = env.storage().instance().get(&DataKey::PriceACumulative).unwrap_or(0);
+        let price_b: i128 = env.storage().instance().get(&DataKey::PriceBCumulative).unwrap_or(0);
+        let last_time: u64 = env.storage().instance().get(&DataKey::LastBlockTimestamp).unwrap_or(0);
+        (price_a, price_b, last_time)
+    }
+
+    /// Queries the TWAP output amount for `token_in` over a custom observation window in seconds.
+    pub fn twap_consult(env: Env, token_in: Address, amount_in: i128, period_seconds: u64) -> i128 {
+        match twap::consult(&env, &token_in, amount_in, period_seconds) {
+            Ok(amt) => amt,
+            Err(e) => panic_with_error!(&env, e),
+        }
+    }
+
+    /// Queries the TWAP output amount for `token_in` over a standard 30-minute window (1,800s).
+    pub fn twap_consult_30m(env: Env, token_in: Address, amount_in: i128) -> i128 {
+        Self::twap_consult(env, token_in, amount_in, twap::TWAP_PERIOD_30M)
+    }
+
+    /// Queries the TWAP output amount for `token_in` over a standard 1-hour window (3,600s).
+    pub fn twap_consult_1h(env: Env, token_in: Address, amount_in: i128) -> i128 {
+        Self::twap_consult(env, token_in, amount_in, twap::TWAP_PERIOD_1H)
     }
 
     /// Integer square root for initial share calculation.
