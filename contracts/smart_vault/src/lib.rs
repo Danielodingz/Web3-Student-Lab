@@ -30,7 +30,16 @@ pub use vesting::VestingSchedule;
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short, Address,
-    Env, Map, String, Symbol, Vec,
+    BytesN, Env, Map, String, Symbol, Vec,
+};
+
+pub mod bitmap;
+pub mod merkle_distributor;
+
+pub use bitmap::BitMap;
+pub use merkle_distributor::{
+    DistributorError, MerkleDistributor, MerkleDistributorConfig,
+    AIRDROP_CLAWBACK_WINDOW_SECONDS,
 };
 
 // ── Storage keys ────────────────────────────────────────────────────────────
@@ -881,6 +890,56 @@ impl SmartVault {
         (symbol_short!("debt_sh"), user.clone())
     }
 
+    // ── Merkle Airdrop Distributor (SC-044) ──────────────────────────────────
+
+    /// Initialize airdrop distribution configuration with 32-byte Merkle root.
+    pub fn init_airdrop(
+        env: Env,
+        admin: Address,
+        token: Option<Address>,
+        merkle_root: BytesN<32>,
+        total_amount: i128,
+    ) {
+        MerkleDistributor::initialize(&env, admin, token, merkle_root, total_amount);
+    }
+
+    /// Claim tokens using cryptographic Merkle proof, address, and allocated amount.
+    pub fn claim_airdrop(
+        env: Env,
+        index: u32,
+        account: Address,
+        amount: i128,
+        proof: Vec<BytesN<32>>,
+    ) {
+        MerkleDistributor::claim(&env, index, account, amount, proof);
+    }
+
+    /// Check if a recipient index has already claimed via the bitmap.
+    pub fn is_airdrop_claimed(env: Env, index: u32) -> bool {
+        MerkleDistributor::is_claimed(&env, index)
+    }
+
+    /// Reclaim unclaimed tokens to `to` address after 90-day window expires.
+    pub fn clawback_airdrop(env: Env, admin: Address, to: Address) -> i128 {
+        MerkleDistributor::clawback(&env, admin, to)
+    }
+
+    /// Get current airdrop configuration.
+    pub fn get_airdrop_config(env: Env) -> MerkleDistributorConfig {
+        MerkleDistributor::get_config(&env)
+    }
+
+    /// Verify an inclusion proof against root in O(log N) time.
+    pub fn verify_airdrop_proof(
+        env: Env,
+        index: u32,
+        account: Address,
+        amount: i128,
+        proof: Vec<BytesN<32>>,
+        root: BytesN<32>,
+    ) -> bool {
+        let leaf = MerkleDistributor::compute_leaf(&env, index, &account, amount);
+        MerkleDistributor::verify_proof(&env, &leaf, &proof, &root)
     // ── Vesting Schedule Endpoints (SC-028) ───────────────────────────────────
 
     /// Creates a new customizable linear vesting schedule for a beneficiary.
@@ -993,7 +1052,7 @@ mod tests {
     use super::*;
     use soroban_sdk::testutils::{Address as _, Ledger};
     use soroban_sdk::Env;
-    use soroban_sdk::{String, Vec};
+    use soroban_sdk::{Bytes, String, Vec};
 
     fn setup() -> (Env, Address, Address) {
         let env = Env::default();
@@ -1276,6 +1335,132 @@ mod tests {
         client.mint_synthetic(&user, &1_600_000);
     }
 
+    fn test_compute_parent(env: &Env, left: &BytesN<32>, right: &BytesN<32>) -> BytesN<32> {
+        let mut combined = Bytes::new(env);
+        if left.to_array() < right.to_array() {
+            combined.append(&left.clone().into());
+            combined.append(&right.clone().into());
+        } else {
+            combined.append(&right.clone().into());
+            combined.append(&left.clone().into());
+        }
+        env.crypto().sha256(&combined).into()
+    }
+
+    #[test]
+    fn test_merkle_airdrop_claim_and_bitmap() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(SmartVault, ());
+        let client = SmartVaultClient::new(&env, &contract_id);
+
+        let admin = Address::generate(&env);
+        let student0 = Address::generate(&env);
+        let student1 = Address::generate(&env);
+
+        let leaf0 = MerkleDistributor::compute_leaf(&env, 0, &student0, 500);
+        let leaf1 = MerkleDistributor::compute_leaf(&env, 1, &student1, 750);
+        let root = test_compute_parent(&env, &leaf0, &leaf1);
+
+        client.init_airdrop(&admin, &None, &root, &1250);
+
+        assert!(!client.is_airdrop_claimed(&0));
+        assert!(!client.is_airdrop_claimed(&1));
+
+        // student0 claims with sibling leaf1
+        let mut proof0 = Vec::new(&env);
+        proof0.push_back(leaf1.clone());
+
+        client.claim_airdrop(&0, &student0, &500, &proof0);
+        assert!(client.is_airdrop_claimed(&0));
+        assert!(!client.is_airdrop_claimed(&1));
+
+        let config = client.get_airdrop_config();
+        assert_eq!(config.claimed_amount, 500);
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #403)")]
+    fn test_merkle_airdrop_double_claim_rejected() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(SmartVault, ());
+        let client = SmartVaultClient::new(&env, &contract_id);
+
+        let admin = Address::generate(&env);
+        let student0 = Address::generate(&env);
+        let student1 = Address::generate(&env);
+
+        let leaf0 = MerkleDistributor::compute_leaf(&env, 0, &student0, 500);
+        let leaf1 = MerkleDistributor::compute_leaf(&env, 1, &student1, 750);
+        let root = test_compute_parent(&env, &leaf0, &leaf1);
+
+        client.init_airdrop(&admin, &None, &root, &1250);
+
+        let mut proof0 = Vec::new(&env);
+        proof0.push_back(leaf1);
+
+        client.claim_airdrop(&0, &student0, &500, &proof0);
+        // Double claim should panic with DistributorError::AlreadyClaimed (403)
+        client.claim_airdrop(&0, &student0, &500, &proof0);
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #404)")]
+    fn test_merkle_airdrop_invalid_proof_rejected() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(SmartVault, ());
+        let client = SmartVaultClient::new(&env, &contract_id);
+
+        let admin = Address::generate(&env);
+        let student0 = Address::generate(&env);
+        let student1 = Address::generate(&env);
+
+        let leaf0 = MerkleDistributor::compute_leaf(&env, 0, &student0, 500);
+        let leaf1 = MerkleDistributor::compute_leaf(&env, 1, &student1, 750);
+        let root = test_compute_parent(&env, &leaf0, &leaf1);
+
+        client.init_airdrop(&admin, &None, &root, &1250);
+
+        let mut fake_proof = Vec::new(&env);
+        fake_proof.push_back(leaf0); // Wrong sibling
+
+        client.claim_airdrop(&0, &student0, &500, &fake_proof);
+    }
+
+    #[test]
+    fn test_merkle_airdrop_clawback_after_90_days() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(SmartVault, ());
+        let client = SmartVaultClient::new(&env, &contract_id);
+
+        let admin = Address::generate(&env);
+        let student0 = Address::generate(&env);
+        let student1 = Address::generate(&env);
+        let treasury = Address::generate(&env);
+
+        let leaf0 = MerkleDistributor::compute_leaf(&env, 0, &student0, 500);
+        let leaf1 = MerkleDistributor::compute_leaf(&env, 1, &student1, 750);
+        let root = test_compute_parent(&env, &leaf0, &leaf1);
+
+        client.init_airdrop(&admin, &None, &root, &1250);
+
+        // Student 0 claims 500
+        let mut proof0 = Vec::new(&env);
+        proof0.push_back(leaf1);
+        client.claim_airdrop(&0, &student0, &500, &proof0);
+
+        // Fast forward 90 days
+        let current_timestamp = env.ledger().timestamp();
+        env.ledger().set_timestamp(current_timestamp + AIRDROP_CLAWBACK_WINDOW_SECONDS);
+
+        let reclaimed = client.clawback_airdrop(&admin, &treasury);
+        assert_eq!(reclaimed, 750);
+
+        let config = client.get_airdrop_config();
+        assert_eq!(config.claimed_amount, 1250);
     #[test]
     fn test_vesting_cliff_and_linear_prorata_unlock() {
         let (env, contract_id, _) = setup();
