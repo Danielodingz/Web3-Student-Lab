@@ -28,6 +28,12 @@ use soroban_sdk::{
     Vec,
 };
 
+pub mod ed25519_verify;
+pub mod vrf;
+
+pub use ed25519_verify::Ed25519Verifier;
+pub use vrf::{VrfConsumer, VrfError, VrfKey};
+
 // ── Constants ────────────────────────────────────────────────────────────────
 const PHASE_KEY: Symbol = symbol_short!("PHASE");
 const ENTROPY_KEY: Symbol = symbol_short!("ENTROPY");
@@ -346,6 +352,49 @@ impl CommitRevealRng {
         }
         BytesN::from_array(env, &result)
     }
+
+    // ── VRF Consumer (SC-045) ────────────────────────────────────────────────
+
+    /// Initialize the authorized VRF oracle public key.
+    pub fn init_vrf_oracle(env: Env, admin: Address, oracle_pubkey: BytesN<32>) {
+        VrfConsumer::init_oracle(&env, admin, oracle_pubkey);
+    }
+
+    /// Update the authorized VRF oracle public key. Admin-only.
+    pub fn update_vrf_oracle(env: Env, admin: Address, new_oracle_pubkey: BytesN<32>) {
+        VrfConsumer::update_oracle(&env, admin, new_oracle_pubkey);
+    }
+
+    /// Get the registered VRF oracle public key.
+    pub fn get_vrf_oracle(env: Env) -> BytesN<32> {
+        VrfConsumer::get_oracle(&env)
+    }
+
+    /// Verify VRF proof against seed and oracle public key without state mutation.
+    pub fn verify_vrf_proof(
+        env: Env,
+        oracle_pubkey: BytesN<32>,
+        seed: BytesN<32>,
+        proof: BytesN<64>,
+    ) -> BytesN<32> {
+        VrfConsumer::verify_vrf_proof(&env, &oracle_pubkey, &seed, &proof)
+    }
+
+    /// Verify VRF proof against registered oracle and consume seed to prevent replay.
+    pub fn consume_vrf(env: Env, seed: BytesN<32>, proof: BytesN<64>) -> BytesN<32> {
+        VrfConsumer::verify_and_consume_vrf(&env, seed, proof)
+    }
+
+    /// Generate an unbiased, provably fair pseudorandom integer in [min, max] using VRF.
+    pub fn generate_vrf_random_int(
+        env: Env,
+        seed: BytesN<32>,
+        proof: BytesN<64>,
+        min: u64,
+        max: u64,
+    ) -> u64 {
+        VrfConsumer::generate_fair_random_int(&env, seed, proof, min, max)
+    }
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -500,5 +549,106 @@ mod tests {
         // Result must be non-zero (XOR of two different secrets)
         let zero = BytesN::from_array(&env, &[0u8; 32]);
         assert!(result != zero);
+    }
+
+    #[test]
+    fn test_vrf_happy_path_and_random_int() {
+        use ed25519_dalek::Signer;
+
+        let (env, contract_id, admin) = setup();
+        let client = CommitRevealRngClient::new(&env, &contract_id);
+
+        let secret_bytes: [u8; 32] = [42u8; 32];
+        let signing_key = ed25519_dalek::SigningKey::from_bytes(&secret_bytes);
+        let verifying_key = signing_key.verifying_key();
+        let oracle_pubkey = BytesN::from_array(&env, verifying_key.as_bytes());
+
+        client.init_vrf_oracle(&admin, &oracle_pubkey);
+        assert_eq!(client.get_vrf_oracle(), oracle_pubkey);
+
+        let seed = BytesN::from_array(&env, &[7u8; 32]);
+        let signature = signing_key.sign(&seed.to_array());
+        let proof = BytesN::from_array(&env, &signature.to_bytes());
+
+        // Stateless verification
+        let output1 = client.verify_vrf_proof(&oracle_pubkey, &seed, &proof);
+        assert_ne!(output1, BytesN::from_array(&env, &[0u8; 32]));
+
+        // Consume and prevent replay
+        let output2 = client.consume_vrf(&seed, &proof);
+        assert_eq!(output1, output2);
+
+        // Test unbiased bounded integer in range [10, 50]
+        let rand_int = VrfConsumer::bounded_pseudorandom_int(&output2, 10, 50);
+        assert!(rand_int >= 10 && rand_int <= 50);
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #504)")]
+    fn test_vrf_rejects_replay_seed() {
+        use ed25519_dalek::Signer;
+
+        let (env, contract_id, admin) = setup();
+        let client = CommitRevealRngClient::new(&env, &contract_id);
+
+        let secret_bytes: [u8; 32] = [55u8; 32];
+        let signing_key = ed25519_dalek::SigningKey::from_bytes(&secret_bytes);
+        let oracle_pubkey = BytesN::from_array(&env, signing_key.verifying_key().as_bytes());
+
+        client.init_vrf_oracle(&admin, &oracle_pubkey);
+
+        let seed = BytesN::from_array(&env, &[99u8; 32]);
+        let signature = signing_key.sign(&seed.to_array());
+        let proof = BytesN::from_array(&env, &signature.to_bytes());
+
+        // First consume succeeds
+        client.consume_vrf(&seed, &proof);
+        // Second consume with identical seed must fail with SeedAlreadyConsumed (#504)
+        client.consume_vrf(&seed, &proof);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_vrf_rejects_tampered_proof() {
+        use ed25519_dalek::Signer;
+
+        let (env, contract_id, admin) = setup();
+        let client = CommitRevealRngClient::new(&env, &contract_id);
+
+        let secret_bytes: [u8; 32] = [88u8; 32];
+        let signing_key = ed25519_dalek::SigningKey::from_bytes(&secret_bytes);
+        let oracle_pubkey = BytesN::from_array(&env, signing_key.verifying_key().as_bytes());
+
+        client.init_vrf_oracle(&admin, &oracle_pubkey);
+
+        let seed = BytesN::from_array(&env, &[12u8; 32]);
+        let signature = signing_key.sign(&seed.to_array());
+        let mut tampered_sig = signature.to_bytes();
+        tampered_sig[0] ^= 0xFF; // Corrupt signature byte
+        let tampered_proof = BytesN::from_array(&env, &tampered_sig);
+
+        // Verification must panic on tampered signature
+        client.consume_vrf(&seed, &tampered_proof);
+    }
+
+    #[test]
+    fn test_vrf_generate_fair_random_int() {
+        use ed25519_dalek::Signer;
+
+        let (env, contract_id, admin) = setup();
+        let client = CommitRevealRngClient::new(&env, &contract_id);
+
+        let secret_bytes: [u8; 32] = [33u8; 32];
+        let signing_key = ed25519_dalek::SigningKey::from_bytes(&secret_bytes);
+        let oracle_pubkey = BytesN::from_array(&env, signing_key.verifying_key().as_bytes());
+
+        client.init_vrf_oracle(&admin, &oracle_pubkey);
+
+        let seed = BytesN::from_array(&env, &[77u8; 32]);
+        let signature = signing_key.sign(&seed.to_array());
+        let proof = BytesN::from_array(&env, &signature.to_bytes());
+
+        let num = client.generate_vrf_random_int(&seed, &proof, &1, &100);
+        assert!(num >= 1 && num <= 100);
     }
 }

@@ -25,6 +25,9 @@ pub struct CertificateMetadata {
     pub uri: String,
 }
 
+pub mod royalties;
+use royalties::{Royalties, RoyaltyInfo};
+
 #[contract]
 pub struct CertificateNFTContract;
 
@@ -68,5 +71,85 @@ impl CertificateNFTContract {
         // Topics: ("mint", student_addr, course_id)
         let topics: (Symbol, Address, String) = (symbol_short!("mint"), student, course_id);
         env.events().publish(topics, metadata);
+    }
+
+    /// Sets royalty configuration for an NFT badge (admin or creator).
+    pub fn set_token_royalty(
+        env: Env,
+        admin: Address,
+        token_id: String,
+        recipient: Address,
+        royalty_bps: u32,
+    ) {
+        admin.require_auth();
+        Royalties::set_royalty_config(&env, &token_id, &recipient, royalty_bps);
+        env.events().publish(
+            (symbol_short!("set_roy"),),
+            (token_id, recipient, royalty_bps),
+        );
+    }
+
+    /// EIP-2981 royalty info standard interface: computes royalty amount and recipient.
+    pub fn royalty_info(env: Env, token_id: String, sale_price: u128) -> RoyaltyInfo {
+        Royalties::royalty_info(&env, &token_id, sale_price)
+    }
+
+    /// Allows designers to update their designated royalty payout address.
+    pub fn update_royalty_recipient(
+        env: Env,
+        token_id: String,
+        current_recipient: Address,
+        new_recipient: Address,
+    ) {
+        Royalties::update_payout_address(&env, &token_id, &current_recipient, &new_recipient);
+        env.events().publish(
+            (symbol_short!("upd_roy"),),
+            (token_id, current_recipient, new_recipient),
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use soroban_sdk::testutils::Address as _;
+
+    #[test]
+    fn test_e2e_mint_and_royalty_calculation() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(CertificateNFTContract, ());
+        let client = CertificateNFTContractClient::new(&env, &contract_id);
+
+        let admin = Address::generate(&env);
+        let student = Address::generate(&env);
+        let designer = Address::generate(&env);
+        let course_id = String::from_str(&env, "CS101");
+        let token_id = String::from_str(&env, "badge-cs101");
+
+        client.mint_certificate(
+            &admin,
+            &student,
+            &course_id,
+            &String::from_str(&env, "A"),
+            &String::from_str(&env, "ipfs://badge101"),
+        );
+
+        // Configure 5% (500 bps) royalty to designer
+        client.set_token_royalty(&admin, &token_id, &designer, &500u32);
+
+        // Check royalty on secondary sale of 10,000 stroops/units
+        // 5% of 10_000 = 500
+        let royalty = client.royalty_info(&token_id, &10_000u128);
+        assert_eq!(royalty.recipient, Some(designer.clone()));
+        assert_eq!(royalty.royalty_amount, 500u128);
+
+        // Test update payout address
+        let new_designer = Address::generate(&env);
+        client.update_royalty_recipient(&token_id, &designer, &new_designer);
+
+        let updated_royalty = client.royalty_info(&token_id, &20_000u128);
+        assert_eq!(updated_royalty.recipient, Some(new_designer));
+        assert_eq!(updated_royalty.royalty_amount, 1_000u128);
     }
 }

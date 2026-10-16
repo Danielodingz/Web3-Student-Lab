@@ -57,6 +57,12 @@ pub enum Key {
     Vote(u64, Address),
 }
 
+pub mod ragequit;
+pub mod treasury;
+
+use ragequit::Ragequit;
+use treasury::{Treasury, TreasuryState};
+
 // ── Errors ────────────────────────────────────────────────────────────────────
 
 #[contracterror]
@@ -72,6 +78,11 @@ pub enum DaoError {
     InsufficientCredits = 8,
     ZeroVotes = 9,
     InvalidDeadline = 10,
+    ZeroShares = 11,
+    ProposalNotPassed = 12,
+    YesVoterCannotRagequit = 13,
+    InsufficientShares = 14,
+    InsufficientReserves = 15,
 }
 
 // ── Contract ──────────────────────────────────────────────────────────────────
@@ -253,6 +264,40 @@ impl DaoGovernance {
             .get(&Key::Vote(proposal_id, voter))
     }
 
+    // ── Treasury & Ragequit (SC-042) ──────────────────────────────────────────
+
+    pub fn deposit_treasury(env: Env, caller: Address, amount: u128) {
+        caller.require_auth();
+        Treasury::deposit_reserves(&env, amount);
+        env.events()
+            .publish((symbol_short!("tres_dep"),), (caller, amount));
+    }
+
+    pub fn grant_shares(env: Env, member: Address, shares: u128) {
+        Self::only_admin(&env);
+        let current = Treasury::get_shares(&env, &member);
+        Treasury::set_shares(&env, &member, current.saturating_add(shares));
+        env.events()
+            .publish((symbol_short!("sh_grant"),), (member, shares));
+    }
+
+    pub fn treasury_shares_of(env: Env, member: Address) -> u128 {
+        Treasury::get_shares(&env, &member)
+    }
+
+    pub fn get_treasury_state(env: Env) -> TreasuryState {
+        Treasury::get_state(&env)
+    }
+
+    pub fn ragequit(env: Env, voter: Address, proposal_id: u64, shares_to_burn: u128) -> u128 {
+        let payout = Ragequit::execute_ragequit(&env, voter.clone(), proposal_id, shares_to_burn);
+        env.events().publish(
+            (symbol_short!("ragequit"),),
+            (voter, proposal_id, shares_to_burn, payout),
+        );
+        payout
+    }
+
     // ── Internal ──────────────────────────────────────────────────────────────
 
     fn only_admin(env: &Env) {
@@ -384,5 +429,71 @@ mod tests {
             &3600,
         );
         client.vote(&voter, &pid, &5i64); // cost = 25 > 3 → panic
+    }
+
+    #[test]
+    fn test_ragequit_dissenting_voter_burns_shares_and_receives_pro_rata() {
+        let (env, client, admin) = setup();
+        let voter_no = Address::generate(&env);
+        let voter_yes = Address::generate(&env);
+
+        client.grant_credits(&voter_no, &1_000u128);
+        client.grant_credits(&voter_yes, &1_000u128);
+
+        // Setup treasury: 1000 shares total (400 for voter_no, 600 for voter_yes), 50,000 reserves
+        client.grant_shares(&voter_no, &400u128);
+        client.grant_shares(&voter_yes, &600u128);
+        client.deposit_treasury(&admin, &50_000u128);
+
+        let pid = client.create_proposal(
+            &admin,
+            &String::from_str(&env, "Controversial proposal"),
+            &String::from_str(&env, "Details"),
+            &100,
+        );
+
+        // voter_no votes -2 (against), voter_yes votes +5 (for)
+        client.vote(&voter_no, &pid, &-2i64);
+        client.vote(&voter_yes, &pid, &5i64);
+
+        // Proposal passes after deadline
+        env.ledger().with_mut(|l| l.timestamp += 200);
+        client.finalize(&pid);
+        assert_eq!(client.get_proposal(&pid).unwrap().status, ProposalStatus::Passed);
+
+        // voter_no ragequits before proposal is executed: burns 400 shares
+        // Expected payout: 400 * 50,000 / 1000 = 20,000
+        let payout = client.ragequit(&voter_no, &pid, &400u128);
+        assert_eq!(payout, 20_000u128);
+
+        // Shares burned atomically
+        assert_eq!(client.treasury_shares_of(&voter_no), 0);
+        let treasury = client.get_treasury_state();
+        assert_eq!(treasury.total_shares, 600);
+        assert_eq!(treasury.total_reserves, 30_000);
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #13)")]
+    fn test_ragequit_prohibits_yes_voters() {
+        let (env, client, admin) = setup();
+        let voter_yes = Address::generate(&env);
+        client.grant_credits(&voter_yes, &1_000u128);
+        client.grant_shares(&voter_yes, &500u128);
+        client.deposit_treasury(&admin, &50_000u128);
+
+        let pid = client.create_proposal(
+            &admin,
+            &String::from_str(&env, "P"),
+            &String::from_str(&env, "D"),
+            &100,
+        );
+        client.vote(&voter_yes, &pid, &5i64);
+
+        env.ledger().with_mut(|l| l.timestamp += 200);
+        client.finalize(&pid);
+
+        // Should panic with YesVoterCannotRagequit (code 13)
+        client.ragequit(&voter_yes, &pid, &100u128);
     }
 }
