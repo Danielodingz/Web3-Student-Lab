@@ -40,6 +40,8 @@ use soroban_sdk::{
     Address, Env,
 };
 
+pub mod math;
+
 /// Fixed-point scale: 1 unit == 10^9.
 pub const FP: i128 = 1_000_000_000;
 /// `ln(2)` in fixed-point.

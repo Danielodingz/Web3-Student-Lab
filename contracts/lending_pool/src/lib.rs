@@ -42,6 +42,8 @@ use soroban_sdk::{
     Address, Env, IntoVal, Symbol,
 };
 
+pub mod math;
+
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const BPS: i128 = 10_000;
