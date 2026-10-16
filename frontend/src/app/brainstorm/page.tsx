@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState, Suspense } from 'react';
 import { getApiEndpoint } from '@/lib/env';
+import { BrainstormSkeleton } from '@/components/ui/skeletons/PageSkeletons';
 
 function BrainstormContent() {
   const searchParams = useSearchParams();
@@ -218,13 +219,7 @@ function BrainstormContent() {
 
 export default function BrainstormPage() {
   return (
-    <Suspense
-      fallback={
-        <div className="flex min-h-screen items-center justify-center">
-          <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-blue-600"></div>
-        </div>
-      }
-    >
+    <Suspense fallback={<BrainstormSkeleton />}>
       <BrainstormContent />
     </Suspense>
   );

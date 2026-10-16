@@ -17,7 +17,7 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short, Address,
+    contract, contractimpl, contracttype, panic_with_error, symbol_short, Address,
     Env, String,
 };
 
@@ -55,6 +55,7 @@ pub enum Key {
     Credits(Address),
     Proposal(u64),
     Vote(u64, Address),
+    UsedNonce(Address, u64),
 }
 
 pub mod ragequit;
@@ -84,6 +85,8 @@ pub enum DaoError {
     InsufficientShares = 14,
     InsufficientReserves = 15,
 }
+pub mod errors;
+pub use errors::DaoError;
 
 // ── Contract ──────────────────────────────────────────────────────────────────
 
@@ -152,26 +155,53 @@ impl DaoGovernance {
     /// * Positive = support, negative = against.
     /// * Cost = votes² credits (quadratic scaling).
     /// * Each address may vote at most once per proposal.
+    /// Cast `votes` on proposal `id`.
+    ///
+    /// * Positive = support, negative = against.
+    /// * Cost = votes² credits (quadratic scaling).
+    /// * Each address may vote at most once per proposal.
     pub fn vote(env: Env, voter: Address, proposal_id: u64, votes: i64) {
         voter.require_auth();
+        Self::internal_vote(&env, voter, proposal_id, votes);
+    }
+
+    /// Cast votes with SEP-0010 Web Auth nonce tracking to prevent replay across web clients.
+    pub fn vote_sep0010(
+        env: Env,
+        voter: Address,
+        proposal_id: u64,
+        votes: i64,
+        nonce: u64,
+        _home_domain: String,
+    ) {
+        voter.require_auth();
+        let nonce_key = Key::UsedNonce(voter.clone(), nonce);
+        if env.storage().persistent().has(&nonce_key) {
+            panic_with_error!(&env, DaoError::AlreadyVoted);
+        }
+        env.storage().persistent().set(&nonce_key, &true);
+        Self::internal_vote(&env, voter, proposal_id, votes);
+    }
+
+    fn internal_vote(env: &Env, voter: Address, proposal_id: u64, votes: i64) {
         if votes == 0 {
-            panic_with_error!(&env, DaoError::ZeroVotes);
+            panic_with_error!(env, DaoError::ZeroVotes);
         }
 
         let mut proposal: Proposal = env
             .storage()
             .persistent()
             .get(&Key::Proposal(proposal_id))
-            .unwrap_or_else(|| panic_with_error!(&env, DaoError::ProposalNotFound));
+            .unwrap_or_else(|| panic_with_error!(env, DaoError::ProposalNotFound));
 
         if proposal.status != ProposalStatus::Active || env.ledger().timestamp() > proposal.deadline
         {
-            panic_with_error!(&env, DaoError::ProposalClosed);
+            panic_with_error!(env, DaoError::ProposalClosed);
         }
 
         let vote_key = Key::Vote(proposal_id, voter.clone());
         if env.storage().persistent().has(&vote_key) {
-            panic_with_error!(&env, DaoError::AlreadyVoted);
+            panic_with_error!(env, DaoError::AlreadyVoted);
         }
 
         // Quadratic cost: cost = |votes|²
@@ -181,7 +211,7 @@ impl DaoGovernance {
         let credits_key = Key::Credits(voter.clone());
         let bal: u128 = env.storage().persistent().get(&credits_key).unwrap_or(0);
         if bal < cost {
-            panic_with_error!(&env, DaoError::InsufficientCredits);
+            panic_with_error!(env, DaoError::InsufficientCredits);
         }
         env.storage().persistent().set(&credits_key, &(bal - cost));
 
@@ -399,7 +429,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Error(Contract, #7)")]
+    #[should_panic(expected = "Error(Contract, #407)")]
     fn cannot_vote_twice() {
         let (env, client, admin) = setup();
         let voter = Address::generate(&env);
@@ -416,7 +446,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Error(Contract, #8)")]
+    #[should_panic(expected = "Error(Contract, #408)")]
     fn insufficient_credits_rejected() {
         let (env, client, admin) = setup();
         let voter = Address::generate(&env);
@@ -495,5 +525,33 @@ mod tests {
 
         // Should panic with YesVoterCannotRagequit (code 13)
         client.ragequit(&voter_yes, &pid, &100u128);
+    fn test_vote_sep0010_and_replay_rejection() {
+        let (env, client, admin) = setup();
+        let voter = Address::generate(&env);
+        client.grant_credits(&voter, &100u128);
+
+        let pid = client.create_proposal(
+            &admin,
+            &String::from_str(&env, "SEP10 Prop"),
+            &String::from_str(&env, "Desc"),
+            &3600,
+        );
+
+        let nonce = 9999u64;
+        let domain = String::from_str(&env, "governance.studentlab.stellar.org");
+
+        // Cast SEP-0010 authenticated vote
+        client.vote_sep0010(&voter, &pid, &3i64, &nonce, &domain);
+
+        let prop = client.get_proposal(&pid).unwrap();
+        assert_eq!(prop.tally, 3);
+        assert_eq!(client.credits_of(&voter), 100 - 9);
+
+        // Replay attempt with same nonce is rejected
+        let res = client.try_vote_sep0010(&voter, &pid, &1i64, &nonce, &domain);
+        assert!(res.is_err());
     }
 }
+
+#[cfg(test)]
+mod test;

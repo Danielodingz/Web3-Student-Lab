@@ -17,6 +17,9 @@
 
 #![no_std]
 
+pub mod payment_splitter;
+pub use payment_splitter::*;
+
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short, Address,
     Env, Symbol, Vec,

@@ -25,6 +25,9 @@
 
 #![no_std]
 
+pub mod vesting;
+pub use vesting::VestingSchedule;
+
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short, Address,
     BytesN, Env, Map, String, Symbol, Vec,
@@ -937,6 +940,108 @@ impl SmartVault {
     ) -> bool {
         let leaf = MerkleDistributor::compute_leaf(&env, index, &account, amount);
         MerkleDistributor::verify_proof(&env, &leaf, &proof, &root)
+    // ── Vesting Schedule Endpoints (SC-028) ───────────────────────────────────
+
+    /// Creates a new customizable linear vesting schedule for a beneficiary.
+    pub fn create_vesting_schedule(
+        env: Env,
+        admin: Address,
+        beneficiary: Address,
+        total_amount: i128,
+        cliff_duration_ledgers: u32,
+        total_duration_ledgers: u32,
+        revocable: bool,
+    ) -> u64 {
+        admin.require_auth();
+        let count_key = symbol_short!("v_cnt");
+        let count: u64 = env.storage().instance().get(&count_key).unwrap_or(0);
+        let schedule_id = count + 1;
+        env.storage().instance().set(&count_key, &schedule_id);
+
+        let current_ledger = env.ledger().sequence();
+        let schedule = match VestingSchedule::new(
+            schedule_id,
+            beneficiary.clone(),
+            total_amount,
+            current_ledger,
+            cliff_duration_ledgers,
+            total_duration_ledgers,
+            revocable,
+        ) {
+            Ok(s) => s,
+            Err(e) => panic_with_error!(&env, e),
+        };
+
+        let sched_key = (symbol_short!("v_sched"), schedule_id);
+        env.storage().persistent().set(&sched_key, &schedule);
+
+        // Store schedule in beneficiary list
+        let ben_key = (symbol_short!("v_ben"), beneficiary.clone());
+        let mut list: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&ben_key)
+            .unwrap_or_else(|| Vec::new(&env));
+        list.push_back(schedule_id);
+        env.storage().persistent().set(&ben_key, &list);
+
+        schedule_id
+    }
+
+    /// Returns the vesting schedule for `schedule_id`.
+    pub fn get_vesting_schedule(env: Env, schedule_id: u64) -> VestingSchedule {
+        let sched_key = (symbol_short!("v_sched"), schedule_id);
+        env.storage()
+            .persistent()
+            .get(&sched_key)
+            .unwrap_or_else(|| panic_with_error!(&env, VaultError::NotFound))
+    }
+
+    /// Returns list of schedule IDs for a beneficiary.
+    pub fn get_beneficiary_schedules(env: Env, beneficiary: Address) -> Vec<u64> {
+        let ben_key = (symbol_short!("v_ben"), beneficiary);
+        env.storage()
+            .persistent()
+            .get(&ben_key)
+            .unwrap_or_else(|| Vec::new(&env))
+    }
+
+    /// Queries currently claimable tokens for a schedule at current ledger sequence.
+    pub fn get_claimable_vesting(env: Env, schedule_id: u64) -> i128 {
+        let schedule = Self::get_vesting_schedule(env.clone(), schedule_id);
+        schedule.claimable_amount(env.ledger().sequence())
+    }
+
+    /// Claims unlocked tokens for `beneficiary`.
+    pub fn claim_vesting(env: Env, beneficiary: Address, schedule_id: u64) -> i128 {
+        beneficiary.require_auth();
+        let mut schedule = Self::get_vesting_schedule(env.clone(), schedule_id);
+        if schedule.beneficiary != beneficiary {
+            panic_with_error!(&env, VaultError::Unauthorized);
+        }
+        let current_ledger = env.ledger().sequence();
+        let claimed = match schedule.claim(current_ledger) {
+            Ok(amt) => amt,
+            Err(e) => panic_with_error!(&env, e),
+        };
+        let sched_key = (symbol_short!("v_sched"), schedule_id);
+        env.storage().persistent().set(&sched_key, &schedule);
+        claimed
+    }
+
+    /// Revokes a schedule, returning unvested tokens to organization treasury.
+    /// Returns (unvested_amount_for_treasury, claimable_vested_for_beneficiary).
+    pub fn revoke_vesting_schedule(env: Env, admin: Address, schedule_id: u64) -> (i128, i128) {
+        admin.require_auth();
+        let mut schedule = Self::get_vesting_schedule(env.clone(), schedule_id);
+        let current_ledger = env.ledger().sequence();
+        let (unvested, claimable) = match schedule.revoke(current_ledger) {
+            Ok(res) => res,
+            Err(e) => panic_with_error!(&env, e),
+        };
+        let sched_key = (symbol_short!("v_sched"), schedule_id);
+        env.storage().persistent().set(&sched_key, &schedule);
+        (unvested, claimable)
     }
 }
 
@@ -1356,5 +1461,76 @@ mod tests {
 
         let config = client.get_airdrop_config();
         assert_eq!(config.claimed_amount, 1250);
+    #[test]
+    fn test_vesting_cliff_and_linear_prorata_unlock() {
+        let (env, contract_id, _) = setup();
+        let client = SmartVaultClient::new(&env, &contract_id);
+        let admin = Address::generate(&env);
+        let beneficiary = Address::generate(&env);
+
+        // Schedule: 100,000 tokens, cliff = 100 ledgers, total = 1000 ledgers
+        let sched_id = client.create_vesting_schedule(
+            &admin,
+            &beneficiary,
+            &100_000,
+            &100,
+            &1000,
+            &true,
+        );
+
+        // 1. Before cliff (sequence + 50 ledgers): ZERO tokens claimable
+        env.ledger().with_mut(|li| li.sequence_number += 50);
+        assert_eq!(client.get_claimable_vesting(&sched_id), 0);
+
+        // 2. Exactly at cliff (sequence + 100 ledgers): 10% (10,000 tokens) claimable
+        env.ledger().with_mut(|li| li.sequence_number += 50);
+        assert_eq!(client.get_claimable_vesting(&sched_id), 10_000);
+
+        // 3. Midway (sequence + 500 ledgers): 50% (50,000 tokens) claimable
+        env.ledger().with_mut(|li| li.sequence_number += 400);
+        assert_eq!(client.get_claimable_vesting(&sched_id), 50_000);
+
+        // Beneficiary claims 50,000 tokens
+        let claimed = client.claim_vesting(&beneficiary, &sched_id);
+        assert_eq!(claimed, 50_000);
+        assert_eq!(client.get_claimable_vesting(&sched_id), 0);
+
+        // 4. Fully matured (sequence + 1000 ledgers): remaining 50,000 tokens claimable
+        env.ledger().with_mut(|li| li.sequence_number += 500);
+        assert_eq!(client.get_claimable_vesting(&sched_id), 50_000);
+    }
+
+    #[test]
+    fn test_vesting_revocation_returns_unvested_to_treasury() {
+        let (env, contract_id, _) = setup();
+        let client = SmartVaultClient::new(&env, &contract_id);
+        let admin = Address::generate(&env);
+        let teacher = Address::generate(&env);
+
+        // Revocable grant: 200,000 tokens over 1000 ledgers with 200 ledger cliff
+        let sched_id = client.create_vesting_schedule(
+            &admin,
+            &teacher,
+            &200_000,
+            &200,
+            &1000,
+            &true,
+        );
+
+        // Advance to ledger 400 (40% vested = 80,000 tokens)
+        env.ledger().with_mut(|li| li.sequence_number += 400);
+
+        // Terminate / revoke schedule
+        let (unvested_to_treasury, claimable_to_teacher) =
+            client.revoke_vesting_schedule(&admin, &sched_id);
+
+        // 60% unvested (120,000 tokens) returns to treasury
+        assert_eq!(unvested_to_treasury, 120_000);
+        // 40% vested (80,000 tokens) remains claimable by teacher
+        assert_eq!(claimable_to_teacher, 80_000);
+
+        // After revocation, no further tokens can vest
+        env.ledger().with_mut(|li| li.sequence_number += 1000);
+        assert_eq!(client.get_claimable_vesting(&sched_id), 80_000);
     }
 }

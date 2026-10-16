@@ -27,7 +27,9 @@
 //! | `INSTANCE_BUMP_LEDGERS`    | 518,400  | Matches persistent target     |
 //! | `TEMP_BUMP_LEDGERS`        | 17,280   | 1 day (scratchpads)          |
 
-use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env, Symbol, Vec};
+use soroban_sdk::{
+    contract, contractimpl, contracttype, symbol_short, Address, Bytes, Env, Symbol, Vec,
+};
 
 // ── Acceptance-criteria constants ────────────────────────────────────────────
 
@@ -258,9 +260,36 @@ impl StorageTTLManager {
     pub fn instance_bump_amount(_env: Env) -> u32 {
         INSTANCE_BUMP_LEDGERS
     }
+
+    // ── SC-038 State Archival & Eviction Recovery ────────────────────────────
+
+    /// Check if a key is archived.
+    pub fn is_state_archived(env: Env, key: Symbol) -> bool {
+        archival::is_archived(&env, &key)
+    }
+
+    /// Calculate restoration cost for an archived key.
+    pub fn get_restoration_cost(env: Env, archived_at_ledger: u32, size_bytes: u32) -> i128 {
+        archival::calculate_restoration_cost(&env, archived_at_ledger, size_bytes)
+    }
+
+    /// Archive an inactive state entry.
+    pub fn archive_state(env: Env, owner: Address, key: Symbol, data: Bytes) {
+        owner.require_auth();
+        archival::archive_state(&env, &owner, &key, &data);
+    }
+
+    /// Restore an archived state entry upon payment of required renewal rent fee.
+    pub fn restore_state(env: Env, payer: Address, key: Symbol, fee_payment: i128) -> i128 {
+        archival::restore_state(&env, &payer, &key, fee_payment)
+    }
 }
+
+pub mod archival;
+pub use archival::*;
 
 // ── Tests (in separate file per issue requirements) ───────────────────────────
 
 #[cfg(test)]
 mod test;
+

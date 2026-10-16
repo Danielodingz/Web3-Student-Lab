@@ -26,11 +26,13 @@ import {
 import { ChartDataTable, type ColumnDef } from '@/components/analytics/ChartDataTable';
 import AchievementBadges from './AchievementBadges';
 import DataSourceNotice from './DataSourceNotice';
+import { PerformanceMetricsSkeleton } from '@/components/ui/skeletons/PageSkeletons';
 
 export interface PerformanceMetricsDashboardProps {
   metrics: LearningMetrics;
   timeSpent: TimeSpentPoint[];
   isLoading?: boolean;
+  error?: string | null;
   /** Deprecated in favour of `dataSource`; kept for callers using the old flag. */
   isFallback?: boolean;
   /** What the displayed data actually is. Defaults to `live`. */
@@ -67,6 +69,7 @@ export default function PerformanceMetricsDashboard({
   metrics,
   timeSpent,
   isLoading = false,
+  error = null,
   isFallback = false,
   dataSource = isFallback ? 'fallback' : 'live',
   lastVerifiedAt = null,
@@ -76,18 +79,7 @@ export default function PerformanceMetricsDashboard({
   const [showPieTable, setShowPieTable] = useState(false);
 
   if (isLoading) {
-    return (
-      <div
-        role="status"
-        aria-live="polite"
-        aria-busy="true"
-        className="flex min-h-[300px] items-center justify-center"
-      >
-        <span className="text-text-secondary text-sm font-bold tracking-widest uppercase">
-          Loading performance metrics…
-        </span>
-      </div>
-    );
+    return <PerformanceMetricsSkeleton />;
   }
 
   const cards = buildMetricCards(metrics);
@@ -115,32 +107,34 @@ export default function PerformanceMetricsDashboard({
 
   return (
     <div className="space-y-8">
-      {/* Fallback / error banner */}
-      {(error || isFallback) && (
-        <div
-          role="alert"
-          className="rounded-xl border border-yellow-500/30 bg-yellow-500/5 p-4 text-sm text-yellow-500"
+      {/* Data-source transparency & export bar */}
+      <div
+        className={`flex flex-wrap items-center justify-between gap-3 rounded-xl border p-4 text-sm ${
+          dataSource === 'live'
+            ? 'border-white/10 bg-black/20'
+            : 'border-yellow-500/30 bg-yellow-500/5 text-yellow-500'
+        }`}
+      >
+        <DataSourceNotice
+          dataSource={dataSource}
+          lastVerifiedAt={lastVerifiedAt}
+          onRetry={onRetry}
+        />
+        <button
+          type="button"
+          onClick={handleExport}
+          disabled={exportDisabled}
+          aria-disabled={exportDisabled}
+          title={
+            exportDisabled
+              ? 'Sample data cannot be exported as learner progress'
+              : `Export data (${dataSource})`
+          }
+          className="hover:bg-red-500/10 disabled:opacity-40 disabled:hover:bg-transparent rounded-lg border border-red-500/40 px-3 py-1 text-xs font-bold tracking-widest text-red-500 uppercase transition-colors"
         >
-          {/* Data-source transparency: live vs cached vs fallback */}
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <DataSourceNotice dataSource={dataSource} lastVerifiedAt={lastVerifiedAt} onRetry={onRetry} />
-            <button
-              type="button"
-              onClick={handleExport}
-              disabled={exportDisabled}
-              aria-disabled={exportDisabled}
-              title={
-                exportDisabled
-                  ? 'Sample data cannot be exported as learner progress'
-                  : `Export data (${dataSource})`
-              }
-              className="hover:bg-red-500/10 disabled:opacity-40 disabled:hover:bg-transparent rounded-lg border border-red-500/40 px-3 py-1 text-xs font-bold tracking-widest text-red-500 uppercase"
-            >
-              Export data
-            </button>
-          </div>
-        </div>
-      )}
+          Export data
+        </button>
+      </div>
 
       {/* KPI cards */}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">

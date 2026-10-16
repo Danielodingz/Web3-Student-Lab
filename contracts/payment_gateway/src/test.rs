@@ -12,7 +12,7 @@
 //!    stakeholder's ability to withdraw theirs.
 
 use super::*;
-use soroban_sdk::{testutils::Address as _, vec, Env};
+use soroban_sdk::{testutils::Address as _, token, vec, Env};
 
 fn setup() -> (Env, Address, PaymentGatewayClient<'static>) {
     let env = Env::default();
@@ -453,3 +453,115 @@ fn test_multiple_escrows_are_independent() {
     client.distribute_escrow(&payer2, &2u64);
     assert_eq!(client.get_balance(&alice), 12_000);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SC-039 — Multi-Token Payment Splitter Tests
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn test_payment_splitter_multi_token_proportional_release() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(PaymentSplitter, ());
+    let client = PaymentSplitterClient::new(&env, &contract_id);
+
+    let alice = Address::generate(&env);
+    let bob = Address::generate(&env);
+    let carol = Address::generate(&env);
+
+    // 50% to Alice, 30% to Bob, 20% to Carol (total 100 shares)
+    let payees = vec![&env, alice.clone(), bob.clone(), carol.clone()];
+    let shares = vec![&env, 50u32, 30u32, 20u32];
+
+    client.initialize(&payees, &shares);
+
+    assert_eq!(client.total_shares(), 100u128);
+    assert_eq!(client.shares(&alice), 50u32);
+    assert_eq!(client.shares(&bob), 30u32);
+    assert_eq!(client.shares(&carol), 20u32);
+
+    // Setup Token A (e.g., USDC)
+    let token_admin_a = Address::generate(&env);
+    let token_a = env.register_stellar_asset_contract_v2(token_admin_a.clone()).address();
+    let token_a_admin = token::StellarAssetClient::new(&env, &token_a);
+
+    // Setup Token B (e.g., XLM)
+    let token_admin_b = Address::generate(&env);
+    let token_b = env.register_stellar_asset_contract_v2(token_admin_b.clone()).address();
+    let token_b_admin = token::StellarAssetClient::new(&env, &token_b);
+
+    let donor = Address::generate(&env);
+    token_a_admin.mint(&donor, &1_000_000);
+    token_b_admin.mint(&donor, &500_000);
+
+    // Deposit Token A (1,000,000)
+    client.deposit(&donor, &token_a, &1_000_000);
+    // Deposit Token B (500,000)
+    client.deposit(&donor, &token_b, &500_000);
+
+    // Check pending payments
+    assert_eq!(client.pending_payment(&token_a, &alice), 500_000);
+    assert_eq!(client.pending_payment(&token_a, &bob), 300_000);
+    assert_eq!(client.pending_payment(&token_a, &carol), 200_000);
+
+    assert_eq!(client.pending_payment(&token_b, &alice), 250_000);
+    assert_eq!(client.pending_payment(&token_b, &bob), 150_000);
+    assert_eq!(client.pending_payment(&token_b, &carol), 100_000);
+
+    // Alice releases Token A
+    let released_a_alice = client.release(&token_a, &alice);
+    assert_eq!(released_a_alice, 500_000);
+    assert_eq!(token::Client::new(&env, &token_a).balance(&alice), 500_000);
+    assert_eq!(client.pending_payment(&token_a, &alice), 0);
+
+    // Bob releases Token B
+    let released_b_bob = client.release(&token_b, &bob);
+    assert_eq!(released_b_bob, 150_000);
+    assert_eq!(token::Client::new(&env, &token_b).balance(&bob), 150_000);
+    assert_eq!(client.pending_payment(&token_b, &bob), 0);
+
+    // Further deposits are split accurately without truncation loss
+    token_a_admin.mint(&donor, &100_000);
+    client.deposit(&donor, &token_a, &100_000);
+
+    // Alice now has 50% of additional 100,000 = 50,000
+    assert_eq!(client.pending_payment(&token_a, &alice), 50_000);
+    let released_a_alice_2 = client.release(&token_a, &alice);
+    assert_eq!(released_a_alice_2, 50_000);
+    assert_eq!(token::Client::new(&env, &token_a).balance(&alice), 550_000);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #4)")]
+fn test_payment_splitter_rejects_duplicate_payees() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(PaymentSplitter, ());
+    let client = PaymentSplitterClient::new(&env, &contract_id);
+
+    let alice = Address::generate(&env);
+    let payees = vec![&env, alice.clone(), alice.clone()];
+    let shares = vec![&env, 50u32, 50u32];
+
+    client.initialize(&payees, &shares);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #3)")]
+fn test_payment_splitter_rejects_zero_shares() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let contract_id = env.register(PaymentSplitter, ());
+    let client = PaymentSplitterClient::new(&env, &contract_id);
+
+    let alice = Address::generate(&env);
+    let bob = Address::generate(&env);
+    let payees = vec![&env, alice, bob];
+    let shares = vec![&env, 50u32, 0u32];
+
+    client.initialize(&payees, &shares);
+}
+

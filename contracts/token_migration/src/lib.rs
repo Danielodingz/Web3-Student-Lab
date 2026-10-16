@@ -5,6 +5,10 @@
 //! legacy tokens.
 
 #![no_std]
+
+pub mod vesting;
+pub use vesting::MigrationVestingSchedule;
+
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, panic_with_error, symbol_short, token,
     Address, Env, Vec,
@@ -60,6 +64,12 @@ pub enum DataKey {
     MigrationCursor,
     /// Flag tracking the overall status of the storage schema migration.
     MigrationStatus,
+    /// Vesting schedule counter.
+    VestingCounter,
+    /// Vesting schedule for schedule_id.
+    VestingSchedule(u64),
+    /// Beneficiary schedule list.
+    BeneficiaryVesting(Address),
 }
 
 /// Overall status of the versioned-storage migration engine.
@@ -385,6 +395,126 @@ impl TokenMigrationContract {
         env.events().publish((symbol_short!("stor_mig"),), cursor);
 
         cursor
+    }
+
+    // ── Vesting Schedule Operations (SC-028) ──────────────────────────────────
+
+    /// Creates a customizable linear vesting schedule for migrated rewards.
+    pub fn create_vesting_schedule(
+        env: Env,
+        admin: Address,
+        beneficiary: Address,
+        total_amount: i128,
+        cliff_duration_ledgers: u32,
+        total_duration_ledgers: u32,
+        revocable: bool,
+    ) -> u64 {
+        admin.require_auth();
+        let config: MigrationConfig = env
+            .storage()
+            .instance()
+            .get(&DataKey::Config)
+            .unwrap_or_else(|| panic_with_error!(&env, MigError::NotInitialized));
+        if admin != config.admin {
+            panic_with_error!(&env, MigError::Unauthorized);
+        }
+
+        let count: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::VestingCounter)
+            .unwrap_or(0);
+        let schedule_id = count + 1;
+        env.storage()
+            .instance()
+            .set(&DataKey::VestingCounter, &schedule_id);
+
+        let current_ledger = env.ledger().sequence();
+        let schedule = match MigrationVestingSchedule::new(
+            schedule_id,
+            beneficiary.clone(),
+            total_amount,
+            current_ledger,
+            cliff_duration_ledgers,
+            total_duration_ledgers,
+            revocable,
+        ) {
+            Ok(s) => s,
+            Err(e) => panic_with_error!(&env, e),
+        };
+
+        env.storage()
+            .persistent()
+            .set(&DataKey::VestingSchedule(schedule_id), &schedule);
+
+        let mut list: Vec<u64> = env
+            .storage()
+            .persistent()
+            .get(&DataKey::BeneficiaryVesting(beneficiary.clone()))
+            .unwrap_or_else(|| Vec::new(&env));
+        list.push_back(schedule_id);
+        env.storage()
+            .persistent()
+            .set(&DataKey::BeneficiaryVesting(beneficiary), &list);
+
+        schedule_id
+    }
+
+    /// Returns the vesting schedule for `schedule_id`.
+    pub fn get_vesting_schedule(env: Env, schedule_id: u64) -> MigrationVestingSchedule {
+        env.storage()
+            .persistent()
+            .get(&DataKey::VestingSchedule(schedule_id))
+            .unwrap_or_else(|| panic_with_error!(&env, MigError::NotInitialized))
+    }
+
+    /// Queries currently claimable tokens for a schedule at current ledger sequence.
+    pub fn get_claimable_vesting(env: Env, schedule_id: u64) -> i128 {
+        let schedule = Self::get_vesting_schedule(env.clone(), schedule_id);
+        schedule.claimable_amount(env.ledger().sequence())
+    }
+
+    /// Claims unlocked tokens for `beneficiary`.
+    pub fn claim_vesting(env: Env, beneficiary: Address, schedule_id: u64) -> i128 {
+        beneficiary.require_auth();
+        let mut schedule = Self::get_vesting_schedule(env.clone(), schedule_id);
+        if schedule.beneficiary != beneficiary {
+            panic_with_error!(&env, MigError::Unauthorized);
+        }
+        let current_ledger = env.ledger().sequence();
+        let claimed = match schedule.claim(current_ledger) {
+            Ok(amt) => amt,
+            Err(e) => panic_with_error!(&env, e),
+        };
+        env.storage()
+            .persistent()
+            .set(&DataKey::VestingSchedule(schedule_id), &schedule);
+        claimed
+    }
+
+    /// Revokes schedule, returning unvested tokens to organization treasury.
+    /// Returns (unvested_for_treasury, claimable_for_beneficiary).
+    pub fn revoke_vesting_schedule(env: Env, admin: Address, schedule_id: u64) -> (i128, i128) {
+        admin.require_auth();
+        let config: MigrationConfig = env
+            .storage()
+            .instance()
+            .get(&DataKey::Config)
+            .unwrap_or_else(|| panic_with_error!(&env, MigError::NotInitialized));
+        if admin != config.admin {
+            panic_with_error!(&env, MigError::Unauthorized);
+        }
+
+        let mut schedule = Self::get_vesting_schedule(env.clone(), schedule_id);
+        let current_ledger = env.ledger().sequence();
+        let (unvested, claimable) = match schedule.revoke(current_ledger) {
+            Ok(res) => res,
+            Err(e) => panic_with_error!(&env, e),
+        };
+        env.storage()
+            .persistent()
+            .set(&DataKey::VestingSchedule(schedule_id), &schedule);
+        (unvested, claimable)
     }
 }
 

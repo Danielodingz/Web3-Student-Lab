@@ -1,5 +1,5 @@
 use super::*;
-use soroban_sdk::{contract, contractimpl, testutils::Address as _, Env};
+use soroban_sdk::{contract, contractimpl, testutils::{Address as _, Ledger as _}, Env};
 
 /// Minimal legacy token: tracks transfers but otherwise a no-op.
 #[contract]
@@ -171,3 +171,43 @@ fn cursor_batch_requires_admin() {
     client.migrate(&user, &10);
     client.migrate_storage_batch(&user, &10);
 }
+
+#[test]
+fn test_token_migration_vesting_cliff_and_pro_rata() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, _, _, _) = setup(&env);
+    let beneficiary = Address::generate(&env);
+
+    // 50,000 tokens, 100 ledgers cliff, 500 ledgers total duration
+    let sched_id = client.create_vesting_schedule(
+        &admin,
+        &beneficiary,
+        &50_000,
+        &100,
+        &500,
+        &true,
+    );
+
+    // Prior to cliff: 0 claimable
+    env.ledger().with_mut(|li| li.sequence_number += 80);
+    assert_eq!(client.get_claimable_vesting(&sched_id), 0);
+
+    // At cliff: 20% (10,000 tokens) claimable
+    env.ledger().with_mut(|li| li.sequence_number += 20);
+    assert_eq!(client.get_claimable_vesting(&sched_id), 10_000);
+
+    // Claim
+    let claimed = client.claim_vesting(&beneficiary, &sched_id);
+    assert_eq!(claimed, 10_000);
+
+    // Midway: 60% total (30,000 tokens) - 10,000 claimed = 20,000 claimable
+    env.ledger().with_mut(|li| li.sequence_number += 200);
+    assert_eq!(client.get_claimable_vesting(&sched_id), 20_000);
+
+    // Revocation returns remaining unvested tokens
+    let (unvested, claimable) = client.revoke_vesting_schedule(&admin, &sched_id);
+    assert_eq!(unvested, 20_000);
+    assert_eq!(claimable, 20_000);
+}
+
