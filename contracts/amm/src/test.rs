@@ -1,5 +1,5 @@
 use super::*;
-use soroban_sdk::testutils::Address as _;
+use soroban_sdk::testutils::{Address as _, Ledger as _};
 use soroban_sdk::{token, Address, Env};
 
 fn setup(
@@ -189,3 +189,69 @@ fn test_dead_shares_burned() {
     // Total shares should include dead shares (1000)
     assert_eq!(total_shares, shares + DEAD_SHARES);
 }
+
+#[test]
+fn test_twap_cumulative_accumulation_and_consultation() {
+    let env = Env::default();
+    let (admin, client, token_a, _token_b, _) = setup(&env);
+
+    // Initial pool ratio: 1 token A = 2 token B (500k A : 1M B)
+    client.add_liquidity(&admin, &500_000, &1_000_000, &0);
+
+    // Advance ledger by 1800 seconds (30 minutes)
+    env.ledger().with_mut(|li| li.timestamp += 1800);
+
+    // Small swap to trigger cumulative price accumulator update
+    let user = Address::generate(&env);
+    let token_a_client = token::StellarAssetClient::new(&env, &token_a);
+    token_a_client.mint(&user, &10_000);
+    client.swap_a_for_b(&user, &10_000, &0);
+
+    let (price_a_cum, price_b_cum, last_time) = client.get_twap_cumulative();
+    assert!(price_a_cum > 0);
+    assert!(price_b_cum > 0);
+    assert_eq!(last_time, 1800);
+
+    // 30-minute TWAP consultation for 1000 Token A
+    let twap_30m = client.twap_consult_30m(&token_a, &1_000);
+    // Price should be around 2x (~2000 token B)
+    assert!(twap_30m >= 1900 && twap_30m <= 2100);
+
+    // Advance another 1800s to total 3600s (1 hour)
+    env.ledger().with_mut(|li| li.timestamp += 1800);
+    token_a_client.mint(&user, &10_000);
+    client.swap_a_for_b(&user, &10_000, &0);
+
+    let twap_1h = client.twap_consult_1h(&token_a, &1_000);
+    assert!(twap_1h > 0);
+}
+
+#[test]
+fn test_twap_resistant_to_single_block_flash_manipulation() {
+    let env = Env::default();
+    let (admin, client, token_a, _token_b, _) = setup(&env);
+
+    // Initial 1:1 ratio
+    client.add_liquidity(&admin, &1_000_000, &1_000_000, &0);
+
+    // Advance 1800s in normal trading
+    env.ledger().with_mut(|li| li.timestamp += 1800);
+    let normal_user = Address::generate(&env);
+    let token_a_client = token::StellarAssetClient::new(&env, &token_a);
+    token_a_client.mint(&normal_user, &1000);
+    client.swap_a_for_b(&normal_user, &1000, &0);
+
+    let twap_before_flash = client.twap_consult_30m(&token_a, &1000);
+
+    // Attacker conducts a massive flash-swap in the EXACT same block (timestamp does not advance)
+    let attacker = Address::generate(&env);
+    token_a_client.mint(&attacker, &500_000);
+    client.swap_a_for_b(&attacker, &500_000, &0);
+
+    // Instantaneous spot price is heavily manipulated, but TWAP accumulator in same block does NOT move:
+    let twap_during_flash = client.twap_consult_30m(&token_a, &1000);
+
+    // TWAP output remains stable and immune to single-block flash loan spike
+    assert_eq!(twap_before_flash, twap_during_flash);
+}
+

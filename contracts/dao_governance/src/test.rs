@@ -83,7 +83,7 @@ fn proposal_fails_when_tally_non_positive() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #7)")]
+#[should_panic(expected = "Error(Contract, #407)")]
 fn cannot_vote_twice() {
     let (env, client, admin) = setup();
     let voter = Address::generate(&env);
@@ -100,7 +100,7 @@ fn cannot_vote_twice() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #8)")]
+#[should_panic(expected = "Error(Contract, #408)")]
 fn insufficient_credits_rejected() {
     let (env, client, admin) = setup();
     let voter = Address::generate(&env);
@@ -117,9 +117,9 @@ fn insufficient_credits_rejected() {
 
 // ── Additional tests ──────────────────────────────────────────────────────────
 
-/// Proposal with zero duration should panic with InvalidDeadline (#10).
+/// Proposal with zero duration should panic with InvalidDeadline (#410).
 #[test]
-#[should_panic(expected = "Error(Contract, #10)")]
+#[should_panic(expected = "Error(Contract, #410)")]
 fn zero_duration_proposal_rejected() {
     let (env, client, admin) = setup();
     // duration = 0 → InvalidDeadline
@@ -132,9 +132,9 @@ fn zero_duration_proposal_rejected() {
 }
 
 /// execute() only works once a proposal has status Passed;
-/// calling it on an Active proposal must panic with ProposalClosed (#5).
+/// calling it on an Active proposal must panic with ProposalClosed (#405).
 #[test]
-#[should_panic(expected = "Error(Contract, #5)")]
+#[should_panic(expected = "Error(Contract, #405)")]
 fn execute_on_active_proposal_rejected() {
     let (env, client, admin) = setup();
 
@@ -148,9 +148,9 @@ fn execute_on_active_proposal_rejected() {
     client.execute(&admin, &pid);
 }
 
-/// execute() on a Failed proposal must also panic with ProposalClosed (#5).
+/// execute() on a Failed proposal must also panic with ProposalClosed (#405).
 #[test]
-#[should_panic(expected = "Error(Contract, #5)")]
+#[should_panic(expected = "Error(Contract, #405)")]
 fn execute_on_failed_proposal_rejected() {
     let (env, client, admin) = setup();
     let voter = Address::generate(&env);
@@ -253,9 +253,9 @@ fn multiple_voter_tally_aggregates_correctly() {
     );
 }
 
-/// finalize() before deadline must panic with VotingDeadlineLive (#6).
+/// finalize() before deadline must panic with VotingDeadlineLive (#406).
 #[test]
-#[should_panic(expected = "Error(Contract, #6)")]
+#[should_panic(expected = "Error(Contract, #406)")]
 fn finalize_before_deadline_panics() {
     let (env, client, admin) = setup();
 

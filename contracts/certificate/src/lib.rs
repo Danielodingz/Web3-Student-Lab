@@ -388,17 +388,8 @@ pub enum DataKey {
     AuditLog(BytesN<32>),
 }
 
-#[contracterror]
-#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Ord)]
-#[repr(u32)]
-pub enum Error {
-    NotFound = 1,
-    AlreadyRevoked = 2,
-    NotRevoked = 3,
-    CohortNotFound = 4,
-    RoyaltyTooHigh = 5,
-    SoulboundNonTransferable = 6,
-}
+pub mod errors;
+pub use errors::{CertificateError, Error};
 
 #[cfg(test)]
 mod test;
