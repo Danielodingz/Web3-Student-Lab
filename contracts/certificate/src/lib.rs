@@ -129,7 +129,6 @@ impl CertificateContract {
     }
 
     pub fn revoke_certificate(env: Env, cert_id: BytesN<32>, reason_code: String) {
-        let caller = env.current_contract_address();
         let mut record: CertificateRecord = env
             .storage()
             .persistent()
@@ -138,6 +137,9 @@ impl CertificateContract {
         if record.status == CertificateStatus::Revoked {
             panic_with_error!(&env, Error::AlreadyRevoked);
         }
+        // Enforce native Soroban authentication: only issuer may revoke
+        record.issuer.require_auth();
+
         record.status = CertificateStatus::Revoked;
         record.revocation_reason = reason_code.clone();
         env.storage()
@@ -147,7 +149,7 @@ impl CertificateContract {
         Self::log_audit(
             &env,
             &cert_id,
-            &caller,
+            &record.issuer,
             String::from_str(&env, "REVOKED"),
             reason_code,
         );
@@ -158,7 +160,6 @@ impl CertificateContract {
         old_cert_id: BytesN<32>,
         new_content_hash: BytesN<32>,
     ) -> BytesN<32> {
-        let caller = env.current_contract_address();
         let mut old_record: CertificateRecord = env
             .storage()
             .persistent()
@@ -167,6 +168,8 @@ impl CertificateContract {
         if old_record.status != CertificateStatus::Revoked {
             panic_with_error!(&env, Error::NotRevoked);
         }
+        // Enforce native Soroban authentication: only issuer may reissue
+        old_record.issuer.require_auth();
 
         let new_cert_id: u64 = env
             .storage()
@@ -212,7 +215,7 @@ impl CertificateContract {
         Self::log_audit(
             &env,
             &new_cert_id_bytes,
-            &caller,
+            &old_record.issuer,
             String::from_str(&env, "REISSUED"),
             String::from_str(&env, ""),
         );
@@ -221,12 +224,18 @@ impl CertificateContract {
     }
 
     pub fn anchor_merkle_cohort(env: Env, cohort_id: String, root_hash: BytesN<32>) {
-        let caller = env.current_contract_address();
+        let admin: Option<Address> = env.storage().instance().get(&DataKey::Admin);
+        let issuer = if let Some(ref a) = admin {
+            a.require_auth();
+            a.clone()
+        } else {
+            env.current_contract_address()
+        };
         let root = MerkleCohortRoot {
             cohort_id: cohort_id.clone(),
             root_hash,
             anchored_at: env.ledger().timestamp(),
-            issuer: caller,
+            issuer,
         };
         env.storage()
             .persistent()

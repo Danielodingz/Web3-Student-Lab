@@ -445,5 +445,7 @@ impl AMMContract {
     }
 }
 
+pub mod math;
+
 #[cfg(test)]
 mod test;
