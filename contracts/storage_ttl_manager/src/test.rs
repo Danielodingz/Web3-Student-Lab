@@ -8,7 +8,7 @@
 //!  - Constants meet the acceptance criteria (≥ 100,000 ledger bump target).
 
 use super::*;
-use soroban_sdk::{testutils::Address as _, Env};
+use soroban_sdk::{testutils::Address as _, testutils::Ledger as _, Bytes, Env};
 
 // ── Helper ────────────────────────────────────────────────────────────────────
 
@@ -145,3 +145,63 @@ fn test_scratchpad_sum_edge_cases() {
         i128::MAX / 2 + 1
     );
 }
+
+// ── SC-038 State Archival & Eviction Recovery Tests ──────────────────────────
+
+#[test]
+fn test_state_archival_and_eviction_recovery_workflow() {
+    let (env, client, _) = setup();
+    let user = Address::generate(&env);
+    let key = Symbol::new(&env, "course_v1");
+
+    let data_bytes = Bytes::from_array(&env, &[1, 2, 3, 4]);
+
+    // Archive the state entry
+    client.archive_state(&user, &key, &data_bytes);
+    assert!(client.is_state_archived(&key));
+
+    // Advance ledger by 100 ledgers
+    env.ledger().with_mut(|l| {
+        l.sequence_number += 100;
+    });
+
+    // Check calculated restoration cost: BASE (100) + 100 ledgers * 5 + 4 bytes * 1 = 604
+    let cost = client.get_restoration_cost(&0u32, &4u32);
+    assert_eq!(cost, 604);
+
+    // Paying required fee restores the state entry
+    let fee_paid = client.restore_state(&user, &key, &604);
+    assert_eq!(fee_paid, 604);
+    assert!(!client.is_state_archived(&key));
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #3)")]
+fn test_state_restoration_fails_with_insufficient_fee() {
+    let (env, client, _) = setup();
+    let user = Address::generate(&env);
+    let key = Symbol::new(&env, "expired_key");
+    let data_bytes = Bytes::from_array(&env, &[10, 20]);
+
+    client.archive_state(&user, &key, &data_bytes);
+    assert!(client.is_state_archived(&key));
+
+    // Try restoring with insufficient fee (e.g., 50 when cost is at least 100)
+    client.restore_state(&user, &key, &50);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #1)")]
+fn test_restoring_non_archived_state_fails() {
+    let (env, client, _) = setup();
+    let user = Address::generate(&env);
+    let key = Symbol::new(&env, "already_active");
+    let data_bytes = Bytes::from_array(&env, &[1]);
+
+    client.archive_state(&user, &key, &data_bytes);
+    client.restore_state(&user, &key, &500);
+
+    // Second restore attempt should fail as it's not archived anymore
+    client.restore_state(&user, &key, &500);
+}
+

@@ -13,7 +13,7 @@
 
 use super::*;
 use soroban_sdk::testutils::Address as _;
-use soroban_sdk::Env;
+use soroban_sdk::{Bytes, Env};
 
 // ── Helper ────────────────────────────────────────────────────────────────────
 
@@ -212,4 +212,154 @@ fn test_distribute_with_no_donations_returns_empty() {
 
     let payouts = client.distribute(&admin);
     assert_eq!(payouts.len(), 0);
+}
+
+// ── SC-037 Penalty Slasher Tests ──────────────────────────────────────────────
+
+#[test]
+fn test_slash_collusion_disqualifies_donations_and_awards_50pct_bounty() {
+    let (env, contract_id, admin) = setup();
+    let client = QuadraticFundingClient::new(&env, &contract_id);
+    let owner = Address::generate(&env);
+    let investigator = Address::generate(&env);
+    let colluder1 = Address::generate(&env);
+    let colluder2 = Address::generate(&env);
+    let honest_donor = Address::generate(&env);
+
+    client.init(&admin, &10_000);
+    client.register_project(&admin, &1, &owner);
+
+    client.whitelist_donor(&admin, &colluder1);
+    client.whitelist_donor(&admin, &colluder2);
+    client.whitelist_donor(&admin, &honest_donor);
+
+    // Colluders deposit bond stake
+    client.deposit_stake(&colluder1, &1_000);
+    client.deposit_stake(&colluder2, &1_000);
+
+    // Honest donor donates 100
+    client.donate(&honest_donor, &1, &100);
+    // Colluders donate 100 each
+    client.donate(&colluder1, &1, &100);
+    client.donate(&colluder2, &1, &100);
+
+    let proj_before = client.get_project(&1);
+    assert_eq!(proj_before.total_donations, 300);
+
+    // Investigator prepares cryptographic proof
+    let evidence_raw = [42u8; 32];
+    let evidence = Bytes::from_array(&env, &evidence_raw);
+    let proof_hash = env.crypto().sha256(&evidence).to_bytes();
+    let proof = CollusionProof {
+        funding_source: Address::generate(&env),
+        timestamp: 12345678,
+        proof_hash,
+        evidence,
+    };
+
+    let colluders = soroban_sdk::vec![&env, colluder1.clone(), colluder2.clone()];
+    let bounty = client.slash_collusion(&investigator, &1, &colluders, &proof);
+
+    // Total confiscated stake = 2_000. 50% bounty = 1_000
+    assert_eq!(bounty, 1_000);
+
+    // Verify colluders' stake is now 0 and they are marked slashed
+    assert_eq!(client.get_stake(&colluder1), 0);
+    assert_eq!(client.get_stake(&colluder2), 0);
+    assert!(client.is_slashed(&colluder1));
+    assert!(client.is_slashed(&colluder2));
+
+    // Verify project donations disqualified
+    let proj_after = client.get_project(&1);
+    assert_eq!(proj_after.total_donations, 100);
+    assert!(!proj_after.donors.contains_key(colluder1));
+    assert!(!proj_after.donors.contains_key(colluder2));
+}
+
+#[test]
+fn test_slash_collusion_rejects_tampered_proof_hash() {
+    let (env, contract_id, admin) = setup();
+    let client = QuadraticFundingClient::new(&env, &contract_id);
+    let owner = Address::generate(&env);
+    let investigator = Address::generate(&env);
+    let colluder1 = Address::generate(&env);
+    let colluder2 = Address::generate(&env);
+
+    client.init(&admin, &10_000);
+    client.register_project(&admin, &1, &owner);
+    client.whitelist_donor(&admin, &colluder1);
+    client.whitelist_donor(&admin, &colluder2);
+    client.donate(&colluder1, &1, &100);
+    client.donate(&colluder2, &1, &100);
+
+    let evidence = Bytes::from_array(&env, &[1, 2, 3, 4]);
+    // Tampered proof hash (does not match sha256(evidence))
+    let bogus_hash = soroban_sdk::BytesN::from_array(&env, &[99u8; 32]);
+    let proof = CollusionProof {
+        funding_source: Address::generate(&env),
+        timestamp: 100,
+        proof_hash: bogus_hash,
+        evidence,
+    };
+
+    let colluders = soroban_sdk::vec![&env, colluder1, colluder2];
+    let res = client.try_slash_collusion(&investigator, &1, &colluders, &proof);
+    assert_eq!(res, Err(Ok(SlasherError::InvalidProof)));
+}
+
+#[test]
+fn test_slash_collusion_rejects_insufficient_colluders() {
+    let (env, contract_id, admin) = setup();
+    let client = QuadraticFundingClient::new(&env, &contract_id);
+    let owner = Address::generate(&env);
+    let investigator = Address::generate(&env);
+    let colluder1 = Address::generate(&env);
+
+    client.init(&admin, &10_000);
+    client.register_project(&admin, &1, &owner);
+    client.whitelist_donor(&admin, &colluder1);
+    client.donate(&colluder1, &1, &100);
+
+    let evidence = Bytes::from_array(&env, &[1, 2, 3]);
+    let proof_hash = env.crypto().sha256(&evidence).to_bytes();
+    let proof = CollusionProof {
+        funding_source: Address::generate(&env),
+        timestamp: 100,
+        proof_hash,
+        evidence,
+    };
+
+    // Cluster collusion requires >= 2 accounts
+    let colluders = soroban_sdk::vec![&env, colluder1];
+    let res = client.try_slash_collusion(&investigator, &1, &colluders, &proof);
+    assert_eq!(res, Err(Ok(SlasherError::InsufficientColluders)));
+}
+
+#[test]
+fn test_slash_collusion_rejects_non_guilty_donor() {
+    let (env, contract_id, admin) = setup();
+    let client = QuadraticFundingClient::new(&env, &contract_id);
+    let owner = Address::generate(&env);
+    let investigator = Address::generate(&env);
+    let colluder1 = Address::generate(&env);
+    let innocent = Address::generate(&env);
+
+    client.init(&admin, &10_000);
+    client.register_project(&admin, &1, &owner);
+    client.whitelist_donor(&admin, &colluder1);
+    client.donate(&colluder1, &1, &100);
+
+    let evidence = Bytes::from_array(&env, &[1, 2, 3]);
+    let proof_hash = env.crypto().sha256(&evidence).to_bytes();
+    let proof = CollusionProof {
+        funding_source: Address::generate(&env),
+        timestamp: 100,
+        proof_hash,
+        evidence,
+    };
+
+    // innocent never donated to project 1
+    let colluders = soroban_sdk::vec![&env, colluder1, innocent];
+    let res = client.try_slash_collusion(&investigator, &1, &colluders, &proof);
+    assert_eq!(res, Err(Ok(SlasherError::DonorNotGuilty)));
 }

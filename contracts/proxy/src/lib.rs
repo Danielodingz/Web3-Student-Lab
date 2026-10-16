@@ -282,6 +282,66 @@ impl ProxyContract {
         env.invoke_contract(&target, &function, args)
     }
 
+    // ── SC-046 Security Council Upgrade Barrier ───────────────────────────────
+
+    /// Configure the designated 5 Security Council member addresses.
+    pub fn set_security_council(env: Env, caller: Address, members: Vec<Address>) {
+        caller.require_auth();
+        Self::require_admin(&env, &caller);
+        security_council::set_security_council(&env, &members)
+            .unwrap_or_else(|e| panic_with_error!(&env, e));
+    }
+
+    /// Retrieve the designated Security Council members.
+    pub fn get_security_council(env: Env) -> Option<Vec<Address>> {
+        security_council::get_security_council(&env)
+    }
+
+    /// Announce a bytecode upgrade subject to 24-hour Security Council timelock.
+    pub fn announce_upgrade(env: Env, caller: Address, wasm_hash: BytesN<32>) -> u64 {
+        caller.require_auth();
+        Self::require_admin(&env, &caller);
+        Self::require_registered_wasm(&env, &wasm_hash);
+        security_council::announce_upgrade(&env, &wasm_hash)
+            .unwrap_or_else(|e| panic_with_error!(&env, e))
+    }
+
+    /// Get details of an upgrade announcement.
+    pub fn get_announcement(env: Env, wasm_hash: BytesN<32>) -> Option<UpgradeAnnouncement> {
+        security_council::get_announcement(&env, &wasm_hash)
+    }
+
+    /// Execute contract bytecode upgrade verified by 3-of-5 Security Council signatures.
+    pub fn execute_security_council_upgrade(
+        env: Env,
+        caller: Address,
+        wasm_hash: BytesN<32>,
+        signatures: Vec<CouncilSignature>,
+    ) {
+        caller.require_auth();
+        Self::require_admin(&env, &caller);
+        Self::require_registered_wasm(&env, &wasm_hash);
+
+        security_council::verify_security_council_signatures(&env, &wasm_hash, &signatures)
+            .unwrap_or_else(|e| panic_with_error!(&env, e));
+
+        let storage_version: u32 = env
+            .storage()
+            .instance()
+            .get(&ProxyDataKey::StorageVersion)
+            .unwrap_or(1u32);
+        env.storage()
+            .instance()
+            .set(&ProxyDataKey::StorageVersion, &(storage_version + 1));
+        env.storage()
+            .instance()
+            .set(&ProxyDataKey::ImplementationWasm, &wasm_hash);
+
+        #[cfg(not(test))]
+        env.deployer()
+            .update_current_contract_wasm(wasm_hash.clone());
+    }
+
     fn propose_upgrade_impl(env: &Env, caller: &Address, wasm_hash: &BytesN<32>) -> u64 {
         Self::require_admin(env, caller);
         Self::require_registered_wasm(env, wasm_hash);
@@ -377,5 +437,9 @@ impl ProxyContract {
     }
 }
 
+pub mod security_council;
+pub use security_council::*;
+
 #[cfg(test)]
 mod tests;
+
