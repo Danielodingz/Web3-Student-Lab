@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { usePerformanceMetrics } from '@/hooks/usePerformanceMetrics';
 import PerformanceMetricsDashboard from '@/components/performance-metrics/PerformanceMetricsDashboard';
 import ContributionPerformanceProfiler from '@/components/performance-metrics/ContributionPerformanceProfiler';
+import CoreWebVitalsMonitor from '@/components/performance-metrics/CoreWebVitalsMonitor';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -69,8 +70,8 @@ export default function PerformanceMetricsPage() {
             Performance <span className="text-red-600">Metrics</span>
           </h1>
           <p className="text-text-secondary text-lg font-light tracking-wide">
-            Track your learning progress, time invested, completion rates, and the
-            achievements you&apos;ve unlocked.
+            Track your learning progress, time invested, completion rates, and the achievements
+            you&apos;ve unlocked.
           </p>
         </motion.div>
 
@@ -90,6 +91,9 @@ export default function PerformanceMetricsPage() {
           />
           <div className="mt-8">
             <ContributionPerformanceProfiler />
+          </div>
+          <div className="mt-8">
+            <CoreWebVitalsMonitor />
           </div>
         </motion.div>
       </main>
