@@ -40,6 +40,13 @@ pub enum AmmError {
     SlippageExceeded = 403,
     /// `404` — Contract has not been initialised.
     NotInitialized = 404,
+    /// `405` — Deadline expired for trade execution.
+    DeadlineExceeded = 405,
+    /// `406` — Same-block bidirectional trades from the same origin address are prohibited.
+    SameBlockBidirectionalTrade = 406,
+}
+
+pub mod anti_mev;
     /// `405` — AMM operations are paused by the circuit breaker.
     ContractPaused = 405,
     /// `406` — Caller is not authorized to manage the circuit breaker.
@@ -314,6 +321,7 @@ impl AMMContract {
         if amount_in <= 0 {
             panic_with_error!(&env, AmmError::InvalidAmount);
         }
+        anti_mev::check_and_record_trade(&env, &user, anti_mev::SwapDirection::AtoB);
 
         let token_a: Address = env.storage().instance().get(&DataKey::TokenA).unwrap();
         let token_b: Address = env.storage().instance().get(&DataKey::TokenB).unwrap();
@@ -380,6 +388,18 @@ impl AMMContract {
         amount_out
     }
 
+    /// Swaps token A for token B with user-specified deadline and slippage protection.
+    pub fn swap_a_for_b_with_deadline(
+        env: Env,
+        user: Address,
+        amount_in: i128,
+        min_amount_out: i128,
+        deadline: u64,
+    ) -> i128 {
+        anti_mev::check_deadline(&env, deadline);
+        Self::swap_a_for_b(env, user, amount_in, min_amount_out)
+    }
+
     /// Swaps token B for token A with dynamic fee based on price impact.
     pub fn swap_b_for_a(env: Env, user: Address, amount_in: i128, min_amount_out: i128) -> i128 {
         user.require_auth();
@@ -387,6 +407,7 @@ impl AMMContract {
         if amount_in <= 0 {
             panic_with_error!(&env, AmmError::InvalidAmount);
         }
+        anti_mev::check_and_record_trade(&env, &user, anti_mev::SwapDirection::BtoA);
 
         let token_a: Address = env.storage().instance().get(&DataKey::TokenA).unwrap();
         let token_b: Address = env.storage().instance().get(&DataKey::TokenB).unwrap();
@@ -451,6 +472,18 @@ impl AMMContract {
         );
 
         amount_out
+    }
+
+    /// Swaps token B for token A with user-specified deadline and slippage protection.
+    pub fn swap_b_for_a_with_deadline(
+        env: Env,
+        user: Address,
+        amount_in: i128,
+        min_amount_out: i128,
+        deadline: u64,
+    ) -> i128 {
+        anti_mev::check_deadline(&env, deadline);
+        Self::swap_b_for_a(env, user, amount_in, min_amount_out)
     }
 
     /// Returns current pool state for calculations and display.

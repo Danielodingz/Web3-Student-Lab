@@ -34,4 +34,6 @@ pub enum DataKey {
     LastBlockTimestamp,
     SnapshotCount,
     Snapshot(u32),
+    // ── Anti-MEV Storage Keys ─────────────────────────────────────────
+    TradeRecord(soroban_sdk::Address),
 }
